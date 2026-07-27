@@ -87,9 +87,9 @@ export default function CustomerSamplePage() {
     return await runTransaction(db, async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
       
-      let nextSeq = 2778; // Starting base number
+      let nextSeq = 0; // Starting base number
       if (counterDoc.exists()) {
-        nextSeq = (counterDoc.data().currentSeq || 2777) + 1;
+        nextSeq = (counterDoc.data().currentSeq || 0) + 1;
       }
       
       transaction.set(counterRef, { currentSeq: nextSeq }, { merge: true });
@@ -141,9 +141,9 @@ export default function CustomerSamplePage() {
 
       // Formatted WhatsApp Message with Clean Order ID
       let text = `*-----------GFive KOLKATA-------------*\n`;
-      text += `*NEW UNSTITCHED SUIT SAMPLE ORDER*\n\n`;
+      text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       
-      text += `*Invoice / SA No:* ${customOrderId}\n`;
+      text += `*Order No:* ${customOrderId}\n`;
       text += `*Design No:* ${sample.designNumber}\n`;
       text += `*Price:* ₹${sample.price}/pc\n\n`;
       text += `*CUSTOMER DETAILS:*\n`;
