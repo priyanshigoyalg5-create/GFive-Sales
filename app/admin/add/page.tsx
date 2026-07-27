@@ -291,7 +291,7 @@ export default function AddSamplePage() {
               >
                 {preview ? (
                   <div style={{ position: 'relative', display: 'inline-block' }}>
-                    <img src={preview} alt="Preview" style={{ maxHeight: '100%', margin: '0 auto', borderRadius: '8px', objectFit: 'contain', display: 'block' }} />
+                    <img src={preview} alt="Preview" style={{ maxHeight: '200px', margin: '0 auto', borderRadius: '8px', objectFit: 'contain', display: 'block' }} />
                     
                     <button
                       type="button"
