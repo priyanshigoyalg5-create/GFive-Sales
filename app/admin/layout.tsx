@@ -8,9 +8,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // 🔄 Updated path from /admin/upload to /admin/add
   const navItems = [
     { name: '📊 Orders Dashboard', path: '/admin/orders' },
-    { name: '➕ Add Sample', path: '/admin/upload' },
+    { name: '➕ Add Sample', path: '/admin/add' },
   ];
 
   return (
@@ -57,13 +58,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         transition: 'transform 0.3s ease',
       }} className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
         
-        {/* Logo / Brand Name */}
+        {/* Brand Header */}
         <div style={{ paddingBottom: '24px', borderBottom: '1px solid #334155', marginBottom: '20px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#38bdf8' }}>GFive Sales</h2>
-          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>Central Admin Portal</p>
+          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>Admin Portal</p>
         </div>
 
-        {/* Navigation Links */}
+        {/* Sidebar Nav Items */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           {navItems.map((item) => {
             const isActive = pathname === item.path;
@@ -92,7 +93,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', paddingTop: '16px', borderTop: '1px solid #334155' }}>
-          GFive Designer Studio © 2026
+          GFive Studio © 2026
         </div>
       </aside>
 
@@ -101,7 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {children}
       </main>
 
-      {/* Responsive Styles for Mobile Support */}
+      {/* Mobile Responsive Rules */}
       <style jsx global>{`
         @media (max-width: 768px) {
           .mobile-header { display: flex !important; }
