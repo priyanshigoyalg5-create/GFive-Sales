@@ -3,7 +3,11 @@
 import React, { useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-
+<div style={{ display: 'flex', gap: '10px', marginBottom: '16px', background: '#0f172a', padding: '10px 16px', borderRadius: '12px' }}>
+  <a href="/admin/orders" style={{ color: '#94a3b8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>📊 Orders Dashboard</a>
+  <a href="/admin/samples" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>🛍️ All Samples</a>
+  <a href="/admin/add" style={{ color: '#ffffff', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>➕ Add Sample</a>
+</div>
 interface ColorRow {
   id: string;
   name: string;
@@ -25,20 +29,17 @@ export default function AddSamplePage() {
   const [work, setWork] = useState('');
   const [remarks, setRemarks] = useState('');
 
-  // DYNAMIC MULTIPLE SAMPLE PHOTOS STATE
+  // Sample Photos State
   const [samplePhotos, setSamplePhotos] = useState<SamplePhotoRow[]>([
-    { id: 'sample_1', file: null, preview: null }
+    { id: '1', file: null, preview: null }
   ]);
 
-  // DYNAMIC COLOUR ROWS STATE (UNTOUCHED)
+  // Dynamic Colour Rows State (Untouched)
   const [colorRows, setColorRows] = useState<ColorRow[]>([
     { id: '1', name: '', photoUrl: '', photoFile: null }
   ]);
 
-  // Custom Toast State
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
-
-  // Success Modal State
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdSampleUrl, setCreatedSampleUrl] = useState('');
   const [createdSampleData, setCreatedSampleData] = useState<any>(null);
@@ -49,31 +50,31 @@ export default function AddSamplePage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // MULTIPLE SAMPLE PHOTO HANDLERS
+  // Sample Photo Row Functions (Same simple pattern as Colour Rows)
   const handleAddSamplePhoto = () => {
     setSamplePhotos((prev) => [
       ...prev,
-      { id: `sample_${Date.now()}`, file: null, preview: null }
+      { id: Date.now().toString(), file: null, preview: null }
     ]);
   };
 
   const handleRemoveSamplePhoto = (id: string) => {
     if (samplePhotos.length === 1) {
-      triggerToast('At least 1 main sample photo is required!', 'error');
+      triggerToast('At least 1 sample photo is required!', 'error');
       return;
     }
-    setSamplePhotos((prev) => prev.filter((p) => p.id !== id));
+    setSamplePhotos((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleSamplePhotoChange = (id: string, fileSelected: File | null) => {
     if (!fileSelected) return;
-    const previewUrl = URL.createObjectURL(fileSelected);
+    const localUrl = URL.createObjectURL(fileSelected);
     setSamplePhotos((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, file: fileSelected, preview: previewUrl } : p))
+      prev.map((item) => (item.id === id ? { ...item, file: fileSelected, preview: localUrl } : item))
     );
   };
 
-  // COLOUR ROW FUNCTIONS (ORIGINAL LOGIC)
+  // Colour Row Functions (Original Logic)
   const handleAddColorRow = () => {
     setColorRows((prev) => [
       ...prev,
@@ -108,7 +109,6 @@ export default function AddSamplePage() {
     );
   };
 
-  // Cloudinary Helper Function
   const uploadToCloudinary = async (imageFile: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', imageFile);
@@ -128,7 +128,7 @@ export default function AddSamplePage() {
 
     const validSamplePhotos = samplePhotos.filter((p) => p.file !== null);
     if (validSamplePhotos.length === 0) {
-      triggerToast('Please attach at least 1 main sample photo!', 'error');
+      triggerToast('Please attach at least 1 sample photo!', 'error');
       return;
     }
     if (!designNumber) {
@@ -149,7 +149,6 @@ export default function AddSamplePage() {
     setLoading(true);
 
     try {
-      // 1. Upload All Sample Photos to Cloudinary
       const uploadedSampleUrls = await Promise.all(
         validSamplePhotos.map(async (p) => {
           return await uploadToCloudinary(p.file!);
@@ -158,7 +157,6 @@ export default function AddSamplePage() {
 
       const mainImageUrl = uploadedSampleUrls[0] || '';
 
-      // 2. Upload Custom Color Images
       const processedColorDetails = await Promise.all(
         validColorRows.map(async (row) => {
           let finalPhotoUrl = '';
@@ -177,7 +175,6 @@ export default function AddSamplePage() {
 
       const validColorNames = processedColorDetails.map((c) => c.name);
 
-      // 3. Save Payload with Array of Sample Images
       const samplePayload = {
         designNumber,
         price: Number(price),
@@ -186,8 +183,8 @@ export default function AddSamplePage() {
         remarks,
         colors: validColorNames,
         colorDetails: processedColorDetails,
-        imageUrl: mainImageUrl, // Primary main photo
-        sampleImages: uploadedSampleUrls, // ALL UPLOADED SAMPLE PHOTOS
+        imageUrl: mainImageUrl,
+        sampleImages: uploadedSampleUrls,
         createdAt: serverTimestamp(),
       };
 
@@ -224,17 +221,14 @@ export default function AddSamplePage() {
       `👇 *Click link to view details & place order:*\n` +
       `${createdSampleUrl}`;
 
-    const firstPhotoFile = samplePhotos[0]?.file;
+    const mainFile = samplePhotos[0]?.file;
 
-    if (navigator.share && firstPhotoFile) {
+    if (navigator.share && mainFile) {
       try {
-        await navigator.share({
-          text: message,
-          files: [firstPhotoFile],
-        });
+        await navigator.share({ text: message, files: [mainFile] });
         return;
       } catch (err) {
-        console.log('Share canceled or not supported', err);
+        console.log('Share canceled', err);
       }
     }
 
@@ -266,13 +260,9 @@ export default function AddSamplePage() {
             borderRadius: '30px',
             boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
             fontSize: '14px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            fontWeight: '600'
           }}>
-            <span>{toastMessage.type === 'success' ? '✅' : '⚠️'}</span>
-            <span>{toastMessage.text}</span>
+            <span>{toastMessage.type === 'success' ? '✅' : '⚠️'} {toastMessage.text}</span>
           </div>
         )}
 
@@ -297,102 +287,77 @@ export default function AddSamplePage() {
         }}>
           <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
-            {/* MULTIPLE SAMPLE PHOTOS SECTION */}
+            {/* SAMPLE PHOTOS SECTION - SIMPLE LIKE COLOURS SECTION */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
-                  Main Sample Photos *
-                </label>
-                <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: '700' }}>
-                  {samplePhotos.length} {samplePhotos.length === 1 ? 'Photo' : 'Photos'}
-                </span>
-              </div>
+              <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
+                Main Sample Photos *
+              </label>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {samplePhotos.map((item, index) => (
-                  <div key={item.id} style={{ position: 'relative' }}>
-                    <div 
-                      style={{ 
-                        border: '2px dashed #cbd5e1', 
-                        borderRadius: '16px', 
-                        padding: '12px', 
-                        textAlign: 'center', 
-                        background: item.preview ? '#ffffff' : '#f8fafc',
-                        cursor: 'pointer',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        minHeight: '140px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 28px', gap: '8px', alignItems: 'center' }}>
+                    
+                    {/* PHOTO UPLOAD BOX */}
+                    <div style={{
+                      position: 'relative',
+                      minHeight: '100px',
+                      borderRadius: '12px',
+                      border: '1.5px dashed #0284c7',
+                      background: '#f0f9ff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      padding: '8px'
+                    }}>
                       {item.preview ? (
-                        <div style={{ position: 'relative', width: '100%', maxHeight: '200px', display: 'flex', justifyContent: 'center' }}>
-                          <img 
-                            src={item.preview} 
-                            alt={`Sample ${index + 1}`} 
-                            style={{ 
-                              maxHeight: '200px', 
-                              width: 'auto',
-                              maxWidth: '100%',
-                              borderRadius: '12px', 
-                              objectFit: 'contain',
-                              display: 'block' 
-                            }} 
-                          />
-                        </div>
+                        <img 
+                          src={item.preview} 
+                          alt={`Sample ${index + 1}`} 
+                          style={{ maxHeight: '160px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px' }} 
+                        />
                       ) : (
-                        <div>
-                          <div style={{ fontSize: '26px', marginBottom: '4px' }}>📷</div>
-                          <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>
-                            {index === 0 ? 'Tap to upload Main Photo' : `Tap to upload Photo #${index + 1}`}
-                          </span>
-                        </div>
+                        <span style={{ fontSize: '13px', color: '#0284c7', fontWeight: '700' }}>
+                          📷 Upload Sample Photo {index > 0 ? `#${index + 1}` : ''}
+                        </span>
                       )}
 
-                      {!item.preview && (
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleSamplePhotoChange(item.id, e.target.files?.[0] || null)}
-                          style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
-                        />
-                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleSamplePhotoChange(item.id, e.target.files?.[0] || null)}
+                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                      />
                     </div>
 
-                    {/* RED CROSS X BUTTON TO REMOVE PHOTO */}
+                    {/* CROSS X BUTTON TO REMOVE ROW */}
                     <button
                       type="button"
                       onClick={() => handleRemoveSamplePhoto(item.id)}
-                      title="Remove Photo"
                       style={{
-                        position: 'absolute',
-                        top: '-8px',
-                        right: '-8px',
-                        background: '#dc2626',
-                        color: '#ffffff',
-                        border: '2px solid #ffffff',
-                        borderRadius: '50%',
-                        width: '26px',
-                        height: '26px',
-                        fontSize: '13px',
+                        background: '#ffffff',
+                        color: '#dc2626',
+                        border: '1px solid #fee2e2',
+                        borderRadius: '8px',
+                        height: '36px',
+                        width: '28px',
                         fontWeight: 'bold',
                         cursor: 'pointer',
-                        zIndex: 20,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                        padding: 0
                       }}
                     >
                       ✕
                     </button>
+
                   </div>
                 ))}
               </div>
 
-              {/* BUTTON TO ADD MORE SAMPLE PHOTOS */}
+              {/* ADD MORE SAMPLE PHOTO BUTTON (EXACT LIKE COLOUR BUTTON) */}
               <button
                 type="button"
                 onClick={handleAddSamplePhoto}
@@ -413,7 +378,7 @@ export default function AddSamplePage() {
                   gap: '6px'
                 }}
               >
-                ➕ Add Sample
+                ➕ Add Sample Photo
               </button>
             </div>
 
@@ -465,7 +430,7 @@ export default function AddSamplePage() {
               </div>
             </div>
 
-            {/* DYNAMIC COLOURS (UNTOUCHED) */}
+            {/* DYNAMIC COLOURS SECTION */}
             <div>
               <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
                 Available Colours & Photos
@@ -485,9 +450,6 @@ export default function AddSamplePage() {
                       placeholder="e.g. Red, M1"
                       value={row.name}
                       onChange={(e) => handleColorNameChange(row.id, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.preventDefault();
-                      }}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -681,8 +643,7 @@ export default function AddSamplePage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)'
+                    gap: '8px'
                   }}
                 >
                   💬 Share directly to WhatsApp
@@ -700,11 +661,7 @@ export default function AddSamplePage() {
                     fontWeight: '600',
                     border: '1px solid #cbd5e1',
                     fontSize: '14px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
+                    cursor: 'pointer'
                   }}
                 >
                   📋 {copied ? 'Link Copied to Clipboard!' : 'Copy Link'}
