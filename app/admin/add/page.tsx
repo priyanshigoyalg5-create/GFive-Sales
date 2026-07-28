@@ -3,11 +3,13 @@
 import React, { useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
 <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', background: '#0f172a', padding: '10px 16px', borderRadius: '12px' }}>
   <a href="/admin/orders" style={{ color: '#94a3b8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>📊 Orders Dashboard</a>
   <a href="/admin/samples" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>🛍️ All Samples</a>
   <a href="/admin/add" style={{ color: '#ffffff', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>➕ Add Sample</a>
 </div>
+
 interface ColorRow {
   id: string;
   name: string;
@@ -27,14 +29,14 @@ export default function AddSamplePage() {
   const [price, setPrice] = useState('');
   const [fabric, setFabric] = useState('');
   const [work, setWork] = useState('');
-  const [remarks, setRemarks] = useState('');
+  const [salesPerson, setSalesPerson] = useState('');
 
   // Sample Photos State
   const [samplePhotos, setSamplePhotos] = useState<SamplePhotoRow[]>([
     { id: '1', file: null, preview: null }
   ]);
 
-  // Dynamic Colour Rows State (Untouched)
+  // Dynamic Colour Rows State
   const [colorRows, setColorRows] = useState<ColorRow[]>([
     { id: '1', name: '', photoUrl: '', photoFile: null }
   ]);
@@ -50,7 +52,7 @@ export default function AddSamplePage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Sample Photo Row Functions (Same simple pattern as Colour Rows)
+  // Sample Photo Row Functions
   const handleAddSamplePhoto = () => {
     setSamplePhotos((prev) => [
       ...prev,
@@ -74,7 +76,7 @@ export default function AddSamplePage() {
     );
   };
 
-  // Colour Row Functions (Original Logic)
+  // Colour Row Functions
   const handleAddColorRow = () => {
     setColorRows((prev) => [
       ...prev,
@@ -139,6 +141,10 @@ export default function AddSamplePage() {
       triggerToast('Please enter Price!', 'error');
       return;
     }
+    if (!salesPerson.trim()) {
+      triggerToast('Please enter Sales Person Name!', 'error');
+      return;
+    }
 
     const validColorRows = colorRows.filter((r) => r.name.trim() !== '');
     if (validColorRows.length === 0) {
@@ -180,7 +186,7 @@ export default function AddSamplePage() {
         price: Number(price),
         fabric,
         work,
-        remarks,
+        salesPerson: salesPerson.trim(),
         colors: validColorNames,
         colorDetails: processedColorDetails,
         imageUrl: mainImageUrl,
@@ -217,7 +223,8 @@ export default function AddSamplePage() {
       `*Design No:* ${createdSampleData.designNumber}\n` +
       `*Rate:* ₹${createdSampleData.price}/pc\n` +
       `*Fabric:* ${createdSampleData.fabric || 'N/A'}\n` +
-      `*Work:* ${createdSampleData.work || 'N/A'}\n\n` +
+      `*Work:* ${createdSampleData.work || 'N/A'}\n` +
+      `*Sales Person:* ${createdSampleData.salesPerson || 'N/A'}\n\n` +
       `👇 *Click link to view details & place order:*\n` +
       `${createdSampleUrl}`;
 
@@ -287,7 +294,7 @@ export default function AddSamplePage() {
         }}>
           <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
-            {/* SAMPLE PHOTOS SECTION - SIMPLE LIKE COLOURS SECTION */}
+            {/* SAMPLE PHOTOS SECTION */}
             <div>
               <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
                 Main Sample Photos *
@@ -296,8 +303,6 @@ export default function AddSamplePage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {samplePhotos.map((item, index) => (
                   <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 28px', gap: '8px', alignItems: 'center' }}>
-                    
-                    {/* PHOTO UPLOAD BOX */}
                     <div style={{
                       position: 'relative',
                       minHeight: '100px',
@@ -331,7 +336,6 @@ export default function AddSamplePage() {
                       />
                     </div>
 
-                    {/* CROSS X BUTTON TO REMOVE ROW */}
                     <button
                       type="button"
                       onClick={() => handleRemoveSamplePhoto(item.id)}
@@ -352,12 +356,10 @@ export default function AddSamplePage() {
                     >
                       ✕
                     </button>
-
                   </div>
                 ))}
               </div>
 
-              {/* ADD MORE SAMPLE PHOTO BUTTON (EXACT LIKE COLOUR BUTTON) */}
               <button
                 type="button"
                 onClick={handleAddSamplePhoto}
@@ -537,14 +539,14 @@ export default function AddSamplePage() {
               </button>
             </div>
 
-            {/* Remarks */}
+            {/* Sales Person */}
             <div>
-              <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Remarks</label>
+              <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '4px' }}>Sales Person *</label>
               <input
                 type="text"
-                placeholder="Soft finish, summer collection"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Enter your name"
+                value={salesPerson}
+                onChange={(e) => setSalesPerson(e.target.value)}
                 style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '14px', color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
