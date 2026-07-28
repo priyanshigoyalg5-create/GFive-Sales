@@ -185,7 +185,7 @@ export default function CustomerSamplePage() {
         createdAt: serverTimestamp(),
       });
 
-      let text = `*-----------GFive KOLKATA-------------*\n`;
+      let text = `*GFive Kolkata*\n`;
       text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       text += `*Order No:* ${customOrderId}\n`;
       text += `*Design No:* ${sample.designNumber}\n`;
