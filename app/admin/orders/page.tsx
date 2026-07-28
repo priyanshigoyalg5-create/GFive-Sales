@@ -80,116 +80,74 @@ export default function AdminOrdersPage() {
   }, []);
 
   // STRICT ORDERING: ALL MAIN SAMPLES FIRST ➔ ONLY DISTINCT COLOUR PHOTOS SECOND
+  // STRICT ORDERING: SAMPLE PHOTOS FIRST ➔ COLOUR PHOTOS SECOND (WITH DESIGN NO FALLBACK)
   const handleOpenGalleryModal = async (order: any) => {
     setGalleryDesignNo(order.designNumber || '');
     let mainSamples: string[] = [];
     let customColorPhotos: string[] = [];
+    let sampleData: any = null;
 
-    if (order.sampleId) {
-      try {
+    try {
+      // 1. First try by sampleId
+      if (order.sampleId) {
         const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
         if (sSnap.exists()) {
-          const sData = sSnap.data();
-
-          // 1. Get All Uploaded Main Samples
-          if (sData.sampleImages && Array.isArray(sData.sampleImages) && sData.sampleImages.length > 0) {
-            mainSamples = sData.sampleImages.filter((u: string) => typeof u === 'string' && u.trim() !== '');
-          } else if (sData.imageUrl) {
-            mainSamples = [sData.imageUrl];
-          }
-
-          // 2. Extract Individual Color Photos that are NOT part of main sample photos
-          if (sData.colorDetails && Array.isArray(sData.colorDetails)) {
-            sData.colorDetails.forEach((cd: any) => {
-              if (cd.photoUrl && cd.photoUrl.trim() !== '' && !mainSamples.includes(cd.photoUrl)) {
-                customColorPhotos.push(cd.photoUrl);
-              }
-            });
-          }
+          sampleData = sSnap.data();
         }
-      } catch (err) {
-        console.warn('Failed fetching sample doc:', err);
       }
+
+      // 2. Fallback: If sampleId missing or not found, query by designNumber
+      if (!sampleData && order.designNumber) {
+        const q = query(collection(db, 'samples'), where('designNumber', '==', String(order.designNumber)));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          sampleData = qSnap.docs[0].data();
+        }
+      }
+
+      // Extract Main Sample Photos FIRST
+      if (sampleData) {
+        if (sampleData.sampleImages && Array.isArray(sampleData.sampleImages) && sampleData.sampleImages.length > 0) {
+          mainSamples = sampleData.sampleImages.filter((u: string) => typeof u === 'string' && u.trim() !== '');
+        } else if (sampleData.imageUrl) {
+          mainSamples = [sampleData.imageUrl];
+        }
+
+        // Extract Colour Photos SECOND
+        if (sampleData.colorDetails && Array.isArray(sampleData.colorDetails)) {
+          sampleData.colorDetails.forEach((cd: any) => {
+            if (cd.photoUrl && cd.photoUrl.trim() !== '' && !mainSamples.includes(cd.photoUrl)) {
+              customColorPhotos.push(cd.photoUrl);
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching sample images:', err);
     }
 
-    // Fallback if sampleId was missing in legacy order
+    // Direct Order fallback if still empty
     if (mainSamples.length === 0) {
-      if (order.imageUrl) mainSamples.push(order.imageUrl);
       if (order.colorPhotos) {
         Object.values(order.colorPhotos).forEach((u: any) => {
-          if (typeof u === 'string' && u.trim() !== '' && !mainSamples.includes(u)) {
+          if (typeof u === 'string' && u.trim() !== '') {
             customColorPhotos.push(u);
           }
         });
       }
     }
 
-    // Combine: [Sample 1, Sample 2...] ➔ [Colour 1, Colour 2...]
+    // FINAL STRICT SEQUENCE: [Sample Photos...] ➔ [Colour Photos...]
     const finalSequence = Array.from(new Set([...mainSamples, ...customColorPhotos]));
 
     if (finalSequence.length === 0) {
-      alert('No sample photos found for this design.');
+      alert('No preview photos found for this design.');
       return;
     }
 
     setCurrentGalleryImages(finalSequence);
     setActiveImageIndex(0);
     setGalleryModalOpen(true);
-  };
-
-  const handleStatusChange = async (orderDocId: string, newStatus: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { status: newStatus });
-    } catch (error) {
-      console.error('Error updating status:', error);
-      alert('Failed to update status.');
-    }
-  };
-
-  const handleMoveToTrash = async (orderDocId: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { isTrashed: true });
-    } catch (err) {
-      console.error('Failed to move to trash:', err);
-    }
-  };
-
-  const handleRestoreFromTrash = async (orderDocId: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { isTrashed: false });
-    } catch (err) {
-      console.error('Failed to restore order:', err);
-    }
-  };
-
-  const handlePermanentDelete = async (orderDocId: string, orderIdStr: string) => {
-    if (confirm(`Are you sure you want to PERMANENTLY delete order ${orderIdStr}?`)) {
-      try {
-        await deleteDoc(doc(db, 'orders', orderDocId));
-        setSelectedOrderIds((prev) => prev.filter((id) => id !== orderDocId));
-      } catch (err) {
-        console.error('Failed to delete order:', err);
-      }
-    }
-  };
-
-  const toggleSelectOrder = (id: string) => {
-    setSelectedOrderIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = (filteredIds: string[]) => {
-    const allSelectedInFiltered = filteredIds.every((id) => selectedOrderIds.includes(id));
-    if (allSelectedInFiltered) {
-      setSelectedOrderIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
-    } else {
-      const newSelections = new Set([...selectedOrderIds, ...filteredIds]);
-      setSelectedOrderIds(Array.from(newSelections));
-    }
   };
 
   const handleBulkMoveToTrash = async () => {
