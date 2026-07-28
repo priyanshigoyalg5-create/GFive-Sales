@@ -32,17 +32,18 @@ export default function AdminOrdersPage() {
 
   // Base64 Converter
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
+    if (!imageUrl) return '';
     try {
       const res = await fetch(imageUrl);
       const blob = await res.blob();
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onerror = () => resolve(imageUrl);
         reader.readAsDataURL(blob);
       });
     } catch (err) {
-      console.warn('Base64 Conversion failed via fetch:', err);
+      console.warn('Base64 Conversion failed:', err);
       return imageUrl;
     }
   };
@@ -79,80 +80,63 @@ export default function AdminOrdersPage() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch sample photos for Amazon-style Preview Modal
+  // Fetch sample photos: MAIN SAMPLE PHOTOS FIRST, THEN COLOR PHOTOS
+  // Fetch sample photos: STRICT SAMPLE PHOTOS FIRST -> COLOR PHOTOS SECOND
   const handleOpenGalleryModal = async (order: any) => {
     setGalleryDesignNo(order.designNumber || '');
-    let imagesList: string[] = [];
+    let mainSamplePhotos: string[] = [];
+    let individualColorPhotos: string[] = [];
 
-    // Check if colorPhotos / items are available
-    if (order.colorPhotos) {
-      const urls = Object.values(order.colorPhotos).filter((u: any) => typeof u === 'string' && u.trim() !== '') as string[];
-      imagesList = Array.from(new Set(urls));
-    }
-
-    // Also fetch sample document to get all original sampleImages uploaded
+    // 1. Fetch Main Sample Photos FIRST from Sample Document
     if (order.sampleId) {
       try {
         const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
         if (sSnap.exists()) {
           const sData = sSnap.data();
-          if (sData.sampleImages && Array.isArray(sData.sampleImages)) {
-            imagesList = Array.from(new Set([...imagesList, ...sData.sampleImages]));
+          if (sData.sampleImages && Array.isArray(sData.sampleImages) && sData.sampleImages.length > 0) {
+            mainSamplePhotos = sData.sampleImages.filter((u: string) => u && u.trim() !== '');
           } else if (sData.imageUrl) {
-            imagesList = Array.from(new Set([...imagesList, sData.imageUrl]));
+            mainSamplePhotos = [sData.imageUrl];
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch original sample gallery photos:', err);
+        console.warn('Failed to fetch sample main photos:', err);
       }
     }
 
-    if (imagesList.length === 0) {
-      alert('No preview photos found for this sample.');
+    // Fallback if mainSamplePhotos is still empty
+    if (mainSamplePhotos.length === 0 && order.imageUrl) {
+      mainSamplePhotos = [order.imageUrl];
+    }
+
+    // 2. Fetch Individual Colour Photos SECOND (Exclude images already present in main samples)
+    if (order.colorPhotos) {
+      const colorUrls = Object.values(order.colorPhotos).filter(
+        (u: any) => typeof u === 'string' && u.trim() !== '' && !mainSamplePhotos.includes(u)
+      ) as string[];
+      individualColorPhotos = Array.from(new Set(colorUrls));
+    }
+
+    // FINAL STRICT SEQUENCE: [Sample Photo 1, Sample Photo 2...] -> [Colour Photos...]
+    const finalOrderedGallery = [...mainSamplePhotos, ...individualColorPhotos];
+
+    if (finalOrderedGallery.length === 0) {
+      alert('No preview photos found for this order.');
       return;
     }
 
-    setCurrentGalleryImages(imagesList);
+    setCurrentGalleryImages(finalOrderedGallery);
     setActiveImageIndex(0);
     setGalleryModalOpen(true);
   };
 
-  const handleStatusChange = async (orderDocId: string, newStatus: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { status: newStatus });
-    } catch (error) {
-      console.error('Error updating status:', error);
-      alert('Failed to update status. Please try again.');
-    }
-  };
-
-  const handleMoveToTrash = async (orderDocId: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { isTrashed: true });
-    } catch (err) {
-      console.error('Failed to move to trash:', err);
-    }
-  };
-
-  const handleRestoreFromTrash = async (orderDocId: string) => {
-    try {
-      const orderRef = doc(db, 'orders', orderDocId);
-      await updateDoc(orderRef, { isTrashed: false });
-    } catch (err) {
-      console.error('Failed to restore order:', err);
-    }
-  };
-
   const handlePermanentDelete = async (orderDocId: string, orderIdStr: string) => {
-    if (confirm(`Are you sure you want to PERMANENTLY delete order ${orderIdStr}? This action cannot be undone.`)) {
+    if (confirm(`Are you sure you want to PERMANENTLY delete order ${orderIdStr}?`)) {
       try {
         await deleteDoc(doc(db, 'orders', orderDocId));
         setSelectedOrderIds((prev) => prev.filter((id) => id !== orderDocId));
       } catch (err) {
         console.error('Failed to delete order:', err);
-        alert('Failed to delete order.');
       }
     }
   };
@@ -186,7 +170,6 @@ export default function AdminOrdersPage() {
         setSelectedOrderIds([]);
       } catch (err) {
         console.error('Bulk trash failed:', err);
-        alert('Failed to move items to trash.');
       }
     }
   };
@@ -203,13 +186,12 @@ export default function AdminOrdersPage() {
       setSelectedOrderIds([]);
     } catch (err) {
       console.error('Bulk restore failed:', err);
-      alert('Failed to restore items.');
     }
   };
 
   const handleBulkPermanentDelete = async () => {
     if (selectedOrderIds.length === 0) return;
-    if (confirm(`⚠️ WARNING: Permanently delete ${selectedOrderIds.length} selected order(s)? This CANNOT be undone!`)) {
+    if (confirm(`⚠️ Permanently delete ${selectedOrderIds.length} selected order(s)?`)) {
       try {
         const batch = writeBatch(db);
         selectedOrderIds.forEach((id) => {
@@ -220,7 +202,6 @@ export default function AdminOrdersPage() {
         setSelectedOrderIds([]);
       } catch (err) {
         console.error('Bulk delete failed:', err);
-        alert('Failed to permanently delete items.');
       }
     }
   };
@@ -264,18 +245,18 @@ export default function AdminOrdersPage() {
         }
       } catch (err) {
         console.error('Invoice PDF Download Failed:', err);
-        alert('Failed to generate PDF invoice. Please try again.');
       } finally {
         setIsGeneratingPdf(false);
       }
     }, 500);
   };
 
-  // MOBILE-FRIENDLY FIXED PRINT FUNCTION
-  const handlePrintInvoice = (order: any) => {
+  // PRINT INVOICE FIXED FOR LAPTOP & MOBILE (Converts images to Base64)
+  const handlePrintInvoice = async (order: any) => {
     setSelectedOrder(order);
     setTimeout(() => {
       if (invoiceRef.current) {
+        const printHtml = invoiceRef.current.innerHTML;
         const printWindow = window.open('', '_blank');
         if (printWindow) {
           printWindow.document.write(`
@@ -283,31 +264,35 @@ export default function AdminOrdersPage() {
             <html>
               <head>
                 <title>Invoice_${order.orderId || order.id}</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
                   * { box-sizing: border-box; }
-                  body { margin: 0; padding: 15px; font-family: Arial, sans-serif; background: #fff; color: #000; }
-                  img { max-width: 100%; height: auto; }
+                  body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #ffffff; color: #000000; }
+                  img { max-width: 100% !important; height: auto !important; display: inline-block; }
+                  table { width: 100%; border-collapse: collapse; }
+                  th, td { border-bottom: 1px solid #ddd; padding: 8px; }
                   @media print {
-                    @page { margin: 0.2in; size: auto; }
-                    body { margin: 0; padding: 0; }
+                    @page { margin: 0.3in; }
+                    body { padding: 0; }
                   }
                 </style>
               </head>
               <body>
-                <div>${invoiceRef.current.innerHTML}</div>
+                ${printHtml}
+                <script>
+                  window.onload = function() {
+                    setTimeout(function() {
+                      window.print();
+                      window.close();
+                    }, 400);
+                  };
+                </script>
               </body>
             </html>
           `);
           printWindow.document.close();
-          printWindow.focus();
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 400);
         }
       }
-    }, 400);
+    }, 300);
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -330,22 +315,16 @@ export default function AdminOrdersPage() {
         const orderDigitsOnly = fullOrderIdStr.replace(/\D/g, '');
         const cleanQuery = rawSearch.replace(/\D/g, '');
 
-        if (cleanQuery === '') {
-          return false;
-        }
+        if (cleanQuery === '') return false;
         return orderDigitsOnly.includes(cleanQuery);
       } else if (searchMode === 'firmName') {
-        const firm = (order.firmName || '').toLowerCase();
-        return firm.includes(rawSearch);
+        return (order.firmName || '').toLowerCase().includes(rawSearch);
       } else if (searchMode === 'designNumber') {
-        const design = String(order.designNumber || '').toLowerCase();
-        return design.includes(rawSearch);
+        return String(order.designNumber || '').toLowerCase().includes(rawSearch);
       } else if (searchMode === 'city') {
-        const city = (order.city || '').toLowerCase();
-        return city.includes(rawSearch);
+        return (order.city || '').toLowerCase().includes(rawSearch);
       } else if (searchMode === 'mobile') {
-        const mobile = (order.mobile || '').toLowerCase();
-        return mobile.includes(rawSearch);
+        return (order.mobile || '').toLowerCase().includes(rawSearch);
       }
     }
 
@@ -357,11 +336,7 @@ export default function AdminOrdersPage() {
 
   const todayDateStr = new Date().toDateString();
   const activeValidOrders = orders.filter((o) => !o.isTrashed && o.status !== 'Cancelled');
-  
-  const todayOrders = activeValidOrders.filter(
-    (o) => o.createdAt?.toDate && o.createdAt.toDate().toDateString() === todayDateStr
-  );
-
+  const todayOrders = activeValidOrders.filter((o) => o.createdAt?.toDate && o.createdAt.toDate().toDateString() === todayDateStr);
   const totalRevenue = activeValidOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
   const totalPieces = activeValidOrders.reduce((sum, o) => sum + Number(o.totalQuantity || 0), 0);
   const trashCount = orders.filter((o) => !!o.isTrashed).length;
@@ -391,27 +366,27 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* Sales Summary Cards Bar */}
+        {/* Sales Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Active Orders</div>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{activeValidOrders.length}</div>
           </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Today's Orders</div>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563eb', marginTop: '4px' }}>{todayOrders.length}</div>
           </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Total Quantity Sold</div>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#0891b2', marginTop: '4px' }}>{totalPieces} pcs</div>
           </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Total Sales Amount</div>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#16a34a', marginTop: '4px' }}>₹{totalRevenue.toLocaleString()}</div>
           </div>
         </div>
 
-        {/* Dynamic Search Bar */}
+        {/* Search & Filters */}
         <div style={{ background: '#ffffff', padding: '14px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
           
           <div style={{ flex: '1 1 320px', display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -429,8 +404,7 @@ export default function AdminOrdersPage() {
                 fontWeight: '800',
                 background: '#f8fafc',
                 color: '#0f172a',
-                outline: 'none',
-                cursor: 'pointer'
+                outline: 'none'
               }}
             >
               <option value="orderId">🔢 Order ID</option>
@@ -443,8 +417,8 @@ export default function AdminOrdersPage() {
             <input
               type="text"
               placeholder={
-                searchMode === 'orderId' ? "Enter Order ID digits (e.g. 1)" :
-                searchMode === 'firmName' ? "Enter Firm / Company Name..." :
+                searchMode === 'orderId' ? "Enter Order ID (e.g. 16)" :
+                searchMode === 'firmName' ? "Enter Firm Name..." :
                 searchMode === 'designNumber' ? "Enter Design Number..." :
                 searchMode === 'city' ? "Enter City Name..." : "Enter Mobile Number..."
               }
@@ -458,7 +432,6 @@ export default function AdminOrdersPage() {
                 fontSize: '14px',
                 fontWeight: '700',
                 color: '#000000',
-                background: '#ffffff',
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -481,8 +454,7 @@ export default function AdminOrdersPage() {
                   border: 'none',
                   cursor: 'pointer',
                   background: statusFilter === status ? (status === 'Trash' ? '#dc2626' : '#0f172a') : '#f1f5f9',
-                  color: statusFilter === status ? '#ffffff' : status === 'Trash' ? '#dc2626' : '#475569',
-                  transition: 'all 0.2s'
+                  color: statusFilter === status ? '#ffffff' : status === 'Trash' ? '#dc2626' : '#475569'
                 }}
               >
                 {status === 'All' ? 'All' :
@@ -497,7 +469,7 @@ export default function AdminOrdersPage() {
 
         </div>
 
-        {/* BULK SELECTION CONTROL BAR */}
+        {/* Bulk Selection Bar */}
         {filteredOrders.length > 0 && (
           <div style={{ background: '#ffffff', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
@@ -518,24 +490,15 @@ export default function AdminOrdersPage() {
 
                 {statusFilter === 'Trash' ? (
                   <>
-                    <button
-                      onClick={handleBulkRestore}
-                      style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                    >
+                    <button onClick={handleBulkRestore} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                       🔄 Restore Selected
                     </button>
-                    <button
-                      onClick={handleBulkPermanentDelete}
-                      style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                    >
+                    <button onClick={handleBulkPermanentDelete} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                       💥 Delete Permanently
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={handleBulkMoveToTrash}
-                    style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                  >
+                  <button onClick={handleBulkMoveToTrash} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                     🗑️ Move Selected to Trash
                   </button>
                 )}
@@ -546,8 +509,8 @@ export default function AdminOrdersPage() {
 
         {/* Orders List */}
         {filteredOrders.length === 0 ? (
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '40px', textAlign: 'center', color: statusFilter === 'Trash' ? '#64748b' : '#ef4444', border: '1px solid #fee2e2', fontWeight: '700' }}>
-            {statusFilter === 'Trash' ? '🗑️ Trash is currently empty.' : '❌ No matching orders found for selected criteria.'}
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '40px', textAlign: 'center', color: '#ef4444', fontWeight: '700' }}>
+            No matching orders found.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -571,12 +534,11 @@ export default function AdminOrdersPage() {
                     opacity: isTrashed ? 0.75 : isCancelled ? 0.65 : isCompleted ? 0.85 : 1,
                     borderRadius: '16px',
                     padding: '18px',
-                    border: isSelected ? '2px solid #2563eb' : isTrashed ? '1px dashed #f43f5e' : isCancelled ? '1px dashed #fca5a5' : isCompleted ? '1px dashed #cbd5e1' : '1px solid #e2e8f0',
+                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px',
-                    transition: 'all 0.2s ease'
+                    gap: '12px'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
@@ -587,9 +549,8 @@ export default function AdminOrdersPage() {
                         onChange={() => toggleSelectOrder(order.id)}
                         style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563eb' }}
                       />
-
                       <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Order ID:</span>
-                      <span style={{ fontSize: '16px', fontWeight: '800', color: isTrashed || isCancelled ? '#ef4444' : '#2563eb', textDecoration: isTrashed || isCancelled ? 'line-through' : 'none' }}>
+                      <span style={{ fontSize: '16px', fontWeight: '800', color: '#2563eb' }}>
                         {displayOrderId}
                       </span>
                     </div>
@@ -626,21 +587,21 @@ export default function AdminOrdersPage() {
                     <div>
                       <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '16px' }}>{order.firmName}</div>
                       <div style={{ color: '#475569', marginTop: '2px' }}>📞 {order.mobile} | 🏙️ {order.city}</div>
-                      {order.gstNo && <div style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>GST: {order.gstNo}</div>}
+                      {order.gstNo && <div style={{ color: '#64748b', fontSize: '12px' }}>GST: {order.gstNo}</div>}
                       {order.agentName && <div style={{ color: '#64748b', fontSize: '12px' }}>Agent: {order.agentName}</div>}
                     </div>
 
                     <div>
                       <div style={{ color: '#0f172a', fontWeight: '700' }}>Design #{order.designNumber}</div>
-                      <div style={{ color: isTrashed || isCancelled ? '#ef4444' : '#16a34a', fontWeight: '800', fontSize: '15px', marginTop: '2px' }}>
+                      <div style={{ color: '#16a34a', fontWeight: '800', fontSize: '15px', marginTop: '2px' }}>
                         {order.totalQuantity} pcs • ₹{order.totalAmount?.toLocaleString()}
                       </div>
                       {order.remarks && <div style={{ color: '#ef4444', fontSize: '12px', fontStyle: 'italic', marginTop: '2px' }}>Note: {order.remarks}</div>}
                     </div>
                   </div>
 
-                  {/* Quantities Badges in Dashboard */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', background: isTrashed ? '#ffe4e6' : isCancelled ? '#fecaca' : isCompleted ? '#e2e8f0' : '#f8fafc', padding: '10px', borderRadius: '10px' }}>
+                  {/* Quantities Badges */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', background: '#f8fafc', padding: '10px', borderRadius: '10px' }}>
                     {order.items && Object.entries(order.items).map(([color, qty]: [string, any]) => {
                       if (qty <= 0) return null;
                       const colorPhoto = order.colorPhotos?.[color] || '';
@@ -654,39 +615,32 @@ export default function AdminOrdersPage() {
                     })}
                   </div>
 
-                  {/* Bottom Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap', gap: '8px' }}>
+                  {/* BOTTOM ACTION BUTTONS - VIEW SAMPLES ALWAYS VISIBLE */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '8px' }}>
                     {isTrashed ? (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => handleRestoreFromTrash(order.id)}
-                          style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                        >
+                        <button onClick={() => handleRestoreFromTrash(order.id)} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                           🔄 Restore
                         </button>
-                        <button
-                          onClick={() => handlePermanentDelete(order.id, displayOrderId)}
-                          style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                        >
+                        <button onClick={() => handlePermanentDelete(order.id, displayOrderId)} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                           💥 Permanent Delete
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => handleMoveToTrash(order.id)}
-                        style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer', padding: 0 }}
-                      >
+                      <button onClick={() => handleMoveToTrash(order.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
                         🗑️ Move to Trash
                       </button>
                     )}
 
                     {!isTrashed && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {/* AMAZON-STYLE SAMPLE PHOTOS PREVIEW BUTTON */}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        
+                        {/* 📷 VIEW SAMPLES BUTTON */}
                         <button
+                          type="button"
                           onClick={() => handleOpenGalleryModal(order)}
                           style={{
-                            background: '#3b82f6',
+                            background: '#2563eb',
                             color: '#ffffff',
                             padding: '10px 14px',
                             borderRadius: '10px',
@@ -694,15 +648,17 @@ export default function AdminOrdersPage() {
                             fontSize: '13px',
                             fontWeight: '700',
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px'
+                            gap: '6px',
+                            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
                           }}
                         >
                           📷 View Samples
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => handlePrintInvoice(order)}
                           style={{
                             background: '#e2e8f0',
@@ -713,7 +669,7 @@ export default function AdminOrdersPage() {
                             fontSize: '13px',
                             fontWeight: '700',
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px'
                           }}
@@ -722,6 +678,7 @@ export default function AdminOrdersPage() {
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => handleDownloadInvoice(order)}
                           disabled={isGeneratingPdf && selectedOrder?.id === order.id}
                           style={{
@@ -733,12 +690,12 @@ export default function AdminOrdersPage() {
                             fontSize: '13px',
                             fontWeight: '700',
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px'
                           }}
                         >
-                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating PDF...' : `📄 Invoice (${displayOrderId})`}
+                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating...' : `📄 Download Invoice (${displayOrderId})`}
                         </button>
                       </div>
                     )}
@@ -752,7 +709,7 @@ export default function AdminOrdersPage() {
 
       </div>
 
-      {/* 🛍️ AMAZON-STYLE SAMPLE PREVIEW SWIPE GALLERY MODAL */}
+      {/* SAMPLE PREVIEW SWIPE GALLERY MODAL */}
       {galleryModalOpen && currentGalleryImages.length > 0 && (
         <div 
           onClick={() => setGalleryModalOpen(false)}
@@ -781,7 +738,6 @@ export default function AdminOrdersPage() {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
             }}
           >
-            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
@@ -809,7 +765,6 @@ export default function AdminOrdersPage() {
               </button>
             </div>
 
-            {/* Main Amazon Bada Preview Display */}
             <div style={{ position: 'relative', width: '100%', height: '360px', background: '#000000', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <img
                 src={currentGalleryImages[activeImageIndex]}
@@ -817,7 +772,6 @@ export default function AdminOrdersPage() {
                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
               />
 
-              {/* Prev Arrow */}
               {currentGalleryImages.length > 1 && (
                 <button
                   onClick={() => setActiveImageIndex((prev) => (prev === 0 ? currentGalleryImages.length - 1 : prev - 1))}
@@ -831,17 +785,13 @@ export default function AdminOrdersPage() {
                     width: '40px',
                     height: '40px',
                     fontSize: '20px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    cursor: 'pointer'
                   }}
                 >
                   ❮
                 </button>
               )}
 
-              {/* Next Arrow */}
               {currentGalleryImages.length > 1 && (
                 <button
                   onClick={() => setActiveImageIndex((prev) => (prev === currentGalleryImages.length - 1 ? 0 : prev + 1))}
@@ -855,10 +805,7 @@ export default function AdminOrdersPage() {
                     width: '40px',
                     height: '40px',
                     fontSize: '20px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    cursor: 'pointer'
                   }}
                 >
                   ❯
@@ -866,7 +813,6 @@ export default function AdminOrdersPage() {
               )}
             </div>
 
-            {/* Amazon-style Bottom Horizontal Thumbnails Slider */}
             {currentGalleryImages.length > 1 && (
               <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', marginTop: '14px', paddingBottom: '6px' }}>
                 {currentGalleryImages.map((imgUrl, idx) => (
@@ -894,7 +840,7 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* 📄 PRINTABLE INVOICE TEMPLATE WITH DEDICATED PHOTO IN ITEM / DESIGN COLUMN */}
+      {/* PRINTABLE INVOICE TEMPLATE */}
       {selectedOrder && (
         <div style={{ position: 'fixed', left: '-9999px', top: '0', width: '750px', zIndex: -100 }}>
           <div ref={invoiceRef} style={{ width: '750px', padding: '40px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b' }}>
@@ -933,7 +879,6 @@ export default function AdminOrdersPage() {
               {selectedOrder.agentName && <div style={{ fontSize: '13px', color: '#334155' }}>Agent: {selectedOrder.agentName}</div>}
             </div>
 
-            {/* Table with Dedicated Item Design Photo */}
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', textAlign: 'left' }}>
@@ -952,7 +897,6 @@ export default function AdminOrdersPage() {
 
                   return (
                     <tr key={col} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      {/* Show Design number & Main Item photo on first row */}
                       {index === 0 ? (
                         <td style={{ padding: '12px 10px', fontWeight: 'bold', verticalAlign: 'middle' }} rowSpan={Object.keys(selectedOrder.items).filter(k => selectedOrder.items[k] > 0).length}>
                           <div>#{selectedOrder.designNumber}</div>
@@ -968,12 +912,10 @@ export default function AdminOrdersPage() {
                         </td>
                       ) : null}
 
-                      {/* Color Name */}
                       <td style={{ padding: '12px 10px', fontWeight: '700', color: '#1e293b', verticalAlign: 'middle' }}>
                         {col}
                       </td>
 
-                      {/* Color Image Column */}
                       <td style={{ padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
                         {photoUrl ? (
                           <img 
@@ -988,17 +930,14 @@ export default function AdminOrdersPage() {
                         )}
                       </td>
 
-                      {/* Quantity */}
                       <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle' }}>
                         {qty} pcs
                       </td>
 
-                      {/* Rate */}
                       <td style={{ padding: '12px 10px', textAlign: 'right', verticalAlign: 'middle' }}>
                         ₹{selectedOrder.price}.00/pc
                       </td>
 
-                      {/* Amount */}
                       <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', verticalAlign: 'middle' }}>
                         ₹{(qty * Number(selectedOrder.price || 0)).toLocaleString()}.00
                       </td>
