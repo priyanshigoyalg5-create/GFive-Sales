@@ -277,11 +277,33 @@ export default function CustomerSamplePage() {
           border: '1px solid #f1f5f9',
           marginBottom: '18px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
             <span style={{ fontSize: '18px' }}>🎨</span>
             <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
               Select Quantities (in Pieces)
             </h3>
+          </div>
+
+          {/* ADDED COLOUR AND QTY HEADINGS ROW */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '0 14px', // aligned with content padding
+            marginBottom: '10px',
+            fontSize: '12px',
+            fontWeight: '700',
+            color: '#64748b', // sub-heading color
+            textTransform: 'uppercase', // modern style
+            letterSpacing: '0.05em'
+          }}>
+            <span>Colour</span>
+            <span style={{ 
+              width: '100px', // same width as QTY input box
+              textAlign: 'center' // centered over input box
+            }}>
+              QTY
+            </span>
           </div>
 
           {colorList.map((item: any) => {
