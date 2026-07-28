@@ -893,7 +893,7 @@ export default function AdminOrdersPage() {
                   <img 
                     src={logoBase64 || GFIVE_LOGO_URL} 
                     alt="GFive Logo" 
-                    style={{ width: '50%', height: '50%', objectFit: 'contain' }} 
+                    style={{ width: '100%', height: '100px', objectFit: 'contain' }} 
                   />
                 </div>
                 <div style={{ fontSize: '13px', marginTop: '2px' }}>
