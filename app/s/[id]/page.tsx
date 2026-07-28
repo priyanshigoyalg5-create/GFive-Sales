@@ -20,17 +20,16 @@ export default function CustomerSamplePage() {
   const [agentName, setAgentName] = useState('');
   const [customerRemarks, setCustomerRemarks] = useState('');
 
-  // Main Display Image State (Dynamic switch on color selection)
-  const [displayImage, setDisplayImage] = useState<string>('');
+  // Active Main Image Index State for Carousel
+  const [activePhotoIndex, setActivePhotoIndex] = useState<number>(0);
 
-  // Image Zoom Modal & Carousel Index State
+  // Zoom Modal Index State
   const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
 
   // Mobile Touch Swipe Coordinates
   const [touchStartX, setTouchStartX] = useState<number>(0);
   const [touchEndX, setTouchEndX] = useState<number>(0);
 
-  // Main WhatsApp Numbers
   const PHONE_NUMBER_1 = '919163932222';
 
   useEffect(() => {
@@ -42,11 +41,8 @@ export default function CustomerSamplePage() {
         if (snap.exists()) {
           const data = snap.data();
           setSample(data);
-          setDisplayImage(data.imageUrl || data.sampleImages?.[0] || ''); // Default main photo
 
           const initialQty: { [col: string]: number } = {};
-
-          // Extract colors
           if (data.colorDetails && data.colorDetails.length > 0) {
             data.colorDetails.forEach((item: any) => {
               if (item.name) initialQty[item.name] = 0;
@@ -54,7 +50,6 @@ export default function CustomerSamplePage() {
           } else if (data.colors) {
             data.colors.forEach((c: string) => (initialQty[c] = 0));
           }
-
           setQuantities(initialQty);
         }
       } catch (err) {
@@ -69,10 +64,16 @@ export default function CustomerSamplePage() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>Loading sample details...</div>;
   if (!sample) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', fontWeight: '600' }}>Sample not found or removed.</div>;
 
-  // Extract all sample photos list
-  const samplePhotosList: string[] = sample.sampleImages && sample.sampleImages.length > 0 
-    ? sample.sampleImages 
-    : [sample.imageUrl].filter(Boolean);
+  // SAFE ARRAY MERGE: Collect all sample photos safely without duplicates
+  const rawPhotos: string[] = [];
+  if (Array.isArray(sample.sampleImages)) {
+    rawPhotos.push(...sample.sampleImages);
+  }
+  if (sample.imageUrl && !rawPhotos.includes(sample.imageUrl)) {
+    rawPhotos.unshift(sample.imageUrl);
+  }
+
+  const samplePhotosList = Array.from(new Set(rawPhotos)).filter((url) => typeof url === 'string' && url.trim() !== '');
 
   const totalQuantity = Object.values(quantities).reduce((acc, curr) => acc + Number(curr || 0), 0);
   const totalAmount = totalQuantity * Number(sample.price || 0);
@@ -94,44 +95,31 @@ export default function CustomerSamplePage() {
 
   const colorList = getColorList();
 
-  // Carousel Navigation Functions for Zoom Modal
+  // Carousel Navigation Logic
   const handleNextPhoto = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (zoomedImageIndex === null) return;
-    setZoomedImageIndex((prev) => (prev! + 1) % samplePhotosList.length);
+    if (samplePhotosList.length === 0) return;
+    setActivePhotoIndex((prev) => (prev + 1) % samplePhotosList.length);
   };
 
   const handlePrevPhoto = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (zoomedImageIndex === null) return;
-    setZoomedImageIndex((prev) => (prev! - 1 + samplePhotosList.length) % samplePhotosList.length);
+    if (samplePhotosList.length === 0) return;
+    setActivePhotoIndex((prev) => (prev - 1 + samplePhotosList.length) % samplePhotosList.length);
   };
 
-  // Touch Swipe Handlers for Mobile
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEndX(e.targetTouches[0].clientX);
-  };
-
+  // Touch Handlers for Mobile Swipe
+  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.targetTouches[0].clientX);
+  const handleTouchMove = (e: React.TouchEvent) => setTouchEndX(e.targetTouches[0].clientX);
   const handleTouchEnd = () => {
     if (!touchStartX || !touchEndX) return;
     const distance = touchStartX - touchEndX;
-    const isSwipeLeft = distance > 40;
-    const isSwipeRight = distance < -40;
-
-    if (isSwipeLeft) {
-      handleNextPhoto();
-    } else if (isSwipeRight) {
-      handlePrevPhoto();
-    }
+    if (distance > 40) handleNextPhoto();
+    if (distance < -40) handlePrevPhoto();
     setTouchStartX(0);
     setTouchEndX(0);
   };
 
-  // Sequential Order ID Generator
   const getNextOrderNumber = async () => {
     const counterRef = doc(db, 'counters', 'sales_orders');
     return await runTransaction(db, async (transaction) => {
@@ -256,7 +244,7 @@ export default function CustomerSamplePage() {
     }}>
       <div style={{ maxWidth: '440px', width: '100%', color: '#0f172a' }}>
         
-        {/* Sample Main Image Card */}
+        {/* Sample Main Image Card with Carousel */}
         <div style={{
           background: '#ffffff',
           borderRadius: '24px',
@@ -265,18 +253,46 @@ export default function CustomerSamplePage() {
           border: '1px solid #f1f5f9',
           marginBottom: '18px'
         }}>
+          {/* CAROUSEL IMAGE CONTAINER */}
           <div 
-            onClick={() => {
-              const currentIdx = samplePhotosList.indexOf(displayImage || sample.imageUrl);
-              setZoomedImageIndex(currentIdx !== -1 ? currentIdx : 0);
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={() => setZoomedImageIndex(activePhotoIndex)}
+            style={{ 
+              position: 'relative', 
+              overflow: 'hidden', 
+              borderRadius: '16px', 
+              cursor: 'pointer', 
+              background: '#f1f5f9',
+              userSelect: 'none'
             }}
-            style={{ position: 'relative', overflow: 'hidden', borderRadius: '16px', cursor: 'pointer', background: '#f1f5f9' }}
           >
             <img
-              src={displayImage || sample.imageUrl}
+              src={samplePhotosList[activePhotoIndex] || sample.imageUrl}
               alt={`Design ${sample.designNumber}`}
               style={{ width: '100%', maxHeight: '380px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
             />
+
+            {/* Photo Counter Badge */}
+            {samplePhotosList.length > 1 && (
+              <span style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: 'rgba(15, 23, 42, 0.75)',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: '700',
+                padding: '4px 10px',
+                borderRadius: '20px',
+                backdropFilter: 'blur(4px)'
+              }}>
+                {activePhotoIndex + 1} / {samplePhotosList.length} Photos
+              </span>
+            )}
+
+            {/* Tap to Zoom Badge */}
             <span style={{
               position: 'absolute',
               bottom: '10px',
@@ -288,9 +304,94 @@ export default function CustomerSamplePage() {
               borderRadius: '6px',
               backdropFilter: 'blur(4px)'
             }}>
-              🔍 Click to Zoom {samplePhotosList.length > 1 ? `(1 of ${samplePhotosList.length})` : ''}
+              🔍 Click to Zoom
             </span>
+
+            {/* Left Carousel Arrow Button */}
+            {samplePhotosList.length > 1 && (
+              <button
+                type="button"
+                onClick={handlePrevPhoto}
+                style={{
+                  position: 'absolute',
+                  left: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  color: '#0f172a',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  zIndex: 10
+                }}
+              >
+                ❮
+              </button>
+            )}
+
+            {/* Right Carousel Arrow Button */}
+            {samplePhotosList.length > 1 && (
+              <button
+                type="button"
+                onClick={handleNextPhoto}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  color: '#0f172a',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  zIndex: 10
+                }}
+              >
+                ❯
+              </button>
+            )}
           </div>
+
+          {/* SAMPLE THUMBNAILS STRIP */}
+          {samplePhotosList.length > 1 && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+              {samplePhotosList.map((imgUrl, idx) => (
+                <img
+                  key={idx}
+                  src={imgUrl}
+                  alt={`Sample ${idx + 1}`}
+                  onClick={() => setActivePhotoIndex(idx)}
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '10px',
+                    objectFit: 'cover',
+                    cursor: 'pointer',
+                    border: activePhotoIndex === idx ? '2.5px solid #2563eb' : '1px solid #cbd5e1',
+                    opacity: activePhotoIndex === idx ? 1 : 0.65,
+                    flexShrink: 0,
+                    transition: 'all 0.2s ease'
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
           <div style={{ marginTop: '16px', padding: '0 4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -383,12 +484,12 @@ export default function CustomerSamplePage() {
                   {hasPhoto ? (
                     <div 
                       onClick={() => {
-                        setDisplayImage(photoUrl);
-                        // Add color photo temporarily to zoom view if clicked
                         if (!samplePhotosList.includes(photoUrl)) {
                           samplePhotosList.push(photoUrl);
                         }
-                        setZoomedImageIndex(samplePhotosList.indexOf(photoUrl));
+                        const foundIdx = samplePhotosList.indexOf(photoUrl);
+                        setActivePhotoIndex(foundIdx);
+                        setZoomedImageIndex(foundIdx);
                       }}
                       style={{
                         width: '46px',
@@ -567,7 +668,7 @@ export default function CustomerSamplePage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(15, 23, 42, 0.92)',
+            background: 'rgba(15, 23, 42, 0.95)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
@@ -619,7 +720,7 @@ export default function CustomerSamplePage() {
             </div>
           )}
 
-          {/* Left Arrow Button (If >1 photos) */}
+          {/* Left Arrow Button */}
           {samplePhotosList.length > 1 && (
             <button
               onClick={handlePrevPhoto}
@@ -638,8 +739,7 @@ export default function CustomerSamplePage() {
                 zIndex: 10000,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(4px)'
+                justifyContent: 'center'
               }}
             >
               ❮
@@ -663,7 +763,7 @@ export default function CustomerSamplePage() {
             />
           </div>
 
-          {/* Right Arrow Button (If >1 photos) */}
+          {/* Right Arrow Button */}
           {samplePhotosList.length > 1 && (
             <button
               onClick={handleNextPhoto}
@@ -682,8 +782,7 @@ export default function CustomerSamplePage() {
                 zIndex: 10000,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(4px)'
+                justifyContent: 'center'
               }}
             >
               ❯
