@@ -64,7 +64,7 @@ export default function CustomerSamplePage() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>Loading sample details...</div>;
   if (!sample) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', fontWeight: '600' }}>Sample not found or removed.</div>;
 
-  // STRICT SAMPLE PHOTOS ONLY: Filter out any colour photos, load ONLY admin uploaded sample images
+  // SAFE ARRAY MERGE: Collect ONLY main sample photos without color photos
   const rawPhotos: string[] = [];
   if (Array.isArray(sample.sampleImages)) {
     rawPhotos.push(...sample.sampleImages);
@@ -487,8 +487,11 @@ export default function CustomerSamplePage() {
                   {hasPhoto ? (
                     <div 
                       onClick={() => {
-                        // Open color photo directly in Zoom modal without adding to top sample carousel
-                        setZoomedImageIndex(samplePhotosList.length);
+                        const foundIdx = samplePhotosList.indexOf(photoUrl);
+                        if (foundIdx !== -1) {
+                          setActivePhotoIndex(foundIdx);
+                          setZoomedImageIndex(foundIdx);
+                        }
                       }}
                       style={{
                         width: '46px',
@@ -715,7 +718,7 @@ export default function CustomerSamplePage() {
               fontWeight: '700',
               backdropFilter: 'blur(4px)'
             }}>
-              {(zoomedImageIndex % samplePhotosList.length) + 1} / {samplePhotosList.length} (Swipe 👈👉)
+              {zoomedImageIndex + 1} / {samplePhotosList.length} (Swipe 👈👉)
             </div>
           )}
 
@@ -748,8 +751,8 @@ export default function CustomerSamplePage() {
           {/* Zoomed Image Container */}
           <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90%', maxHeight: '85vh' }}>
             <img
-              src={samplePhotosList[zoomedImageIndex % samplePhotosList.length] || sample.imageUrl}
-              alt={`Zoomed View`}
+              src={samplePhotosList[zoomedImageIndex]}
+              alt={`Zoomed View ${zoomedImageIndex + 1}`}
               style={{
                 maxWidth: '100%',
                 maxHeight: '80vh',
