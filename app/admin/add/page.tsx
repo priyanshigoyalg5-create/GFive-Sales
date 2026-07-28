@@ -11,6 +11,12 @@ interface ColorRow {
   photoFile?: File | null;
 }
 
+interface SamplePhotoRow {
+  id: string;
+  file: File | null;
+  preview: string | null;
+}
+
 export default function AddSamplePage() {
   const [loading, setLoading] = useState(false);
   const [designNumber, setDesignNumber] = useState('');
@@ -19,13 +25,15 @@ export default function AddSamplePage() {
   const [work, setWork] = useState('');
   const [remarks, setRemarks] = useState('');
 
-  // Dynamic Colour Rows State
+  // Dynamic Multiple Sample Photos State (Separated from Colors)
+  const [samplePhotos, setSamplePhotos] = useState<SamplePhotoRow[]>([
+    { id: '1', file: null, preview: null }
+  ]);
+
+  // Dynamic Colour Rows State (Purely Untouched)
   const [colorRows, setColorRows] = useState<ColorRow[]>([
     { id: '1', name: '', photoUrl: '', photoFile: null }
   ]);
-
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
 
   // Custom Toast State
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
@@ -41,23 +49,31 @@ export default function AddSamplePage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] || null;
-    setFile(selectedFile);
-    if (selectedFile) {
-      setPreview(URL.createObjectURL(selectedFile));
+  // Multiple Sample Photos Functions
+  const handleAddSamplePhoto = () => {
+    setSamplePhotos((prev) => [
+      ...prev,
+      { id: Date.now().toString(), file: null, preview: null }
+    ]);
+  };
+
+  const handleRemoveSamplePhoto = (id: string) => {
+    if (samplePhotos.length === 1) {
+      triggerToast('At least 1 sample photo is required!', 'error');
+      return;
     }
+    setSamplePhotos((prev) => prev.filter((p) => p.id !== id));
   };
 
-  // Remove selected main image
-  const handleRemoveImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setFile(null);
-    setPreview(null);
+  const handleSamplePhotoChange = (id: string, fileSelected: File | null) => {
+    if (!fileSelected) return;
+    const previewUrl = URL.createObjectURL(fileSelected);
+    setSamplePhotos((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, file: fileSelected, preview: previewUrl } : p))
+    );
   };
 
-  // Dynamic Colour Row Functions
+  // Dynamic Colour Row Functions (Original Logic)
   const handleAddColorRow = () => {
     setColorRows((prev) => [
       ...prev,
@@ -79,7 +95,6 @@ export default function AddSamplePage() {
     );
   };
 
-  // Custom Color Image Upload File Handler
   const handleColorImageChange = (id: string, fileSelected: File | null) => {
     if (!fileSelected) return;
     const localPreviewUrl = URL.createObjectURL(fileSelected);
@@ -110,8 +125,10 @@ export default function AddSamplePage() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      triggerToast('Please attach a main sample photo!', 'error');
+
+    const validSamplePhotos = samplePhotos.filter((p) => p.file !== null);
+    if (validSamplePhotos.length === 0) {
+      triggerToast('Please attach at least 1 main sample photo!', 'error');
       return;
     }
     if (!designNumber) {
@@ -132,26 +149,24 @@ export default function AddSamplePage() {
     setLoading(true);
 
     try {
-      // 1. Upload Main Image
-      const mainImageUrl = await uploadToCloudinary(file);
-      if (!mainImageUrl) {
-        throw new Error('Main image upload failed.');
-      }
+      // 1. Upload All Sample Photos to Cloudinary
+      const uploadedSampleUrls = await Promise.all(
+        validSamplePhotos.map(async (p) => {
+          return await uploadToCloudinary(p.file!);
+        })
+      );
+
+      const mainImageUrl = uploadedSampleUrls[0] || '';
 
       // 2. Upload Custom Color Images
       const processedColorDetails = await Promise.all(
         validColorRows.map(async (row) => {
-          let finalPhotoUrl = row.photoUrl;
+          let finalPhotoUrl = '';
 
           if (row.photoFile) {
             const uploadedUrl = await uploadToCloudinary(row.photoFile);
             if (uploadedUrl) finalPhotoUrl = uploadedUrl;
           }
-
-          // If no custom photo file provided, keep photoUrl empty
-if (!row.photoFile) {
-  finalPhotoUrl = "";
-}
 
           return {
             name: row.name.trim(),
@@ -162,7 +177,7 @@ if (!row.photoFile) {
 
       const validColorNames = processedColorDetails.map((c) => c.name);
 
-      // 3. Save to Firestore
+      // 3. Save to Firestore (Includes sampleImages array)
       const samplePayload = {
         designNumber,
         price: Number(price),
@@ -171,7 +186,8 @@ if (!row.photoFile) {
         remarks,
         colors: validColorNames,
         colorDetails: processedColorDetails,
-        imageUrl: mainImageUrl,
+        imageUrl: mainImageUrl, // First/Primary image
+        sampleImages: uploadedSampleUrls, // Full array of sample photos for gallery swipe
         createdAt: serverTimestamp(),
       };
 
@@ -197,33 +213,35 @@ if (!row.photoFile) {
   };
 
   const shareToWhatsApp = async () => {
-  if (!createdSampleData || !createdSampleUrl) return;
+    if (!createdSampleData || !createdSampleUrl) return;
 
-  const message = `*Gfive -Kolkata*\n` +
-    `*NEW UNSTITCHED SUIT SAMPLE*\n\n` +
-    `*Design No:* ${createdSampleData.designNumber}\n` +
-    `*Rate:* ₹${createdSampleData.price}/pc\n` +
-    `*Fabric:* ${createdSampleData.fabric || 'N/A'}\n` +
-    `*Work:* ${createdSampleData.work || 'N/A'}\n\n` +
-    `👇 *Click link to view details & place order:*\n` +
-    `${createdSampleUrl}`;
+    const message = `*Gfive -Kolkata*\n` +
+      `*NEW UNSTITCHED SUIT SAMPLE*\n\n` +
+      `*Design No:* ${createdSampleData.designNumber}\n` +
+      `*Rate:* ₹${createdSampleData.price}/pc\n` +
+      `*Fabric:* ${createdSampleData.fabric || 'N/A'}\n` +
+      `*Work:* ${createdSampleData.work || 'N/A'}\n\n` +
+      `👇 *Click link to view details & place order:*\n` +
+      `${createdSampleUrl}`;
 
-  // 1-TAP SOLUTION: Direct Phone Share (Photo + Caption attached together)
-  if (navigator.share && file) {
-    try {
-      await navigator.share({
-        text: message,
-        files: [file], // Main Uploaded Image File
-      });
-      return;
-    } catch (err) {
-      console.log('Share canceled or not supported', err);
+    const mainFile = samplePhotos[0]?.file;
+
+    // Direct Phone Share (Photo + Caption attached together)
+    if (navigator.share && mainFile) {
+      try {
+        await navigator.share({
+          text: message,
+          files: [mainFile],
+        });
+        return;
+      } catch (err) {
+        console.log('Share canceled or not supported', err);
+      }
     }
-  }
 
-  // Fallback for laptops/desktops
-  window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-};
+    // Fallback
+    window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+  };
 
   return (
     <div style={{
@@ -281,57 +299,86 @@ if (!row.photoFile) {
         }}>
           <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
-            {/* MAIN SAMPLE PHOTO PICKER WITH FIXED ASPECT RATIO / PROPORTION */}
+            {/* MULTIPLE SAMPLE PHOTOS SECTION WITH DYNAMIC ADD & REMOVE (CROSS X) */}
             <div>
-              <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '6px' }}>
-                Main Sample Photo *
-              </label>
-              <div 
-                style={{ 
-                  border: '2px dashed #cbd5e1', 
-                  borderRadius: '16px', 
-                  padding: '12px', 
-                  textAlign: 'center', 
-                  background: preview ? '#ffffff' : '#f8fafc',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  minHeight: '160px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {preview ? (
-                  <div style={{ position: 'relative', width: '100%', maxHeight: '220px', display: 'flex', justifyContent: 'center' }}>
-                    <img 
-                      src={preview} 
-                      alt="Preview" 
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                  Main Sample Photos *
+                </label>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                  ({samplePhotos.length} {samplePhotos.length === 1 ? 'photo' : 'photos'})
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {samplePhotos.map((item, index) => (
+                  <div key={item.id} style={{ position: 'relative' }}>
+                    <div 
                       style={{ 
-                        maxHeight: '220px', 
-                        width: 'auto',
-                        maxWidth: '100%',
-                        borderRadius: '12px', 
-                        objectFit: 'contain',
-                        display: 'block' 
-                      }} 
-                    />
-                    
+                        border: '2px dashed #cbd5e1', 
+                        borderRadius: '16px', 
+                        padding: '12px', 
+                        textAlign: 'center', 
+                        background: item.preview ? '#ffffff' : '#f8fafc',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        minHeight: '140px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {item.preview ? (
+                        <div style={{ position: 'relative', width: '100%', maxHeight: '200px', display: 'flex', justifyContent: 'center' }}>
+                          <img 
+                            src={item.preview} 
+                            alt={`Sample ${index + 1}`} 
+                            style={{ 
+                              maxHeight: '200px', 
+                              width: 'auto',
+                              maxWidth: '100%',
+                              borderRadius: '12px', 
+                              objectFit: 'contain',
+                              display: 'block' 
+                            }} 
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: '26px', marginBottom: '4px' }}>📷</div>
+                          <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>
+                            {index === 0 ? 'Tap to upload Main Sample Photo' : `Tap to upload Sample Photo #${index + 1}`}
+                          </span>
+                        </div>
+                      )}
+
+                      {!item.preview && (
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSamplePhotoChange(item.id, e.target.files?.[0] || null)}
+                          style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                        />
+                      )}
+                    </div>
+
+                    {/* CROSS X BUTTON TO REMOVE PHOTO */}
                     <button
                       type="button"
-                      onClick={handleRemoveImage}
-                      title="Remove image"
+                      onClick={() => handleRemoveSamplePhoto(item.id)}
+                      title="Remove Photo"
                       style={{
                         position: 'absolute',
                         top: '-8px',
-                        right: '0px',
-                        background: '#000000',
+                        right: '-8px',
+                        background: '#dc2626',
                         color: '#ffffff',
                         border: '2px solid #ffffff',
                         borderRadius: '50%',
                         width: '26px',
                         height: '26px',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         zIndex: 20,
@@ -344,21 +391,32 @@ if (!row.photoFile) {
                       ✕
                     </button>
                   </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: '28px', marginBottom: '4px' }}>📷</div>
-                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: '600' }}>Tap to capture or upload photo</span>
-                  </div>
-                )}
-                {!preview && (
-                  <input
-  type="file"
-  accept="image/*"
-  onChange={handleFileChange}
-  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
-/>
-                )}
+                ))}
               </div>
+
+              {/* ADD MORE SAMPLE PHOTO BUTTON */}
+              <button
+                type="button"
+                onClick={handleAddSamplePhoto}
+                style={{
+                  marginTop: '10px',
+                  background: '#f8fafc',
+                  color: '#0f172a',
+                  border: '1.5px dashed #94a3b8',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                ➕ Add Sample
+              </button>
             </div>
 
             {/* Design Number & Rate */}
@@ -409,7 +467,7 @@ if (!row.photoFile) {
               </div>
             </div>
 
-            {/* DYNAMIC COLOURS */}
+            {/* DYNAMIC COLOURS (UNTOUCHED AND SEPARATE) */}
             <div>
               <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
                 Available Colours & Photos
@@ -605,7 +663,7 @@ if (!row.photoFile) {
                 Sample Created!
               </h3>
               <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>
-                Design <strong>#{createdSampleData?.designNumber}</strong> link is generated and ready to share.
+                Design <strong>#{createdSampleData?.designNumber}</strong> link generated with {createdSampleData?.sampleImages?.length || 1} sample photos.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
