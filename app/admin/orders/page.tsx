@@ -271,10 +271,17 @@ export default function AdminOrdersPage() {
           const fileName = `${displayOrderId.replace('#', '_')}.pdf`;
 
           const opt = {
-            margin: [0.2, 0.2, 0.2, 0.2],
+            margin: 0.15,
             filename: fileName,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+            html2canvas: { 
+              scale: 2, 
+              useCORS: true, 
+              allowTaint: true,
+              windowWidth: 800, // Phone browser viewport width fix
+              scrollX: 0,
+              scrollY: 0
+            },
             jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
           };
 
@@ -285,7 +292,7 @@ export default function AdminOrdersPage() {
       } finally {
         setIsGeneratingPdf(false);
       }
-    }, 600);
+    }, 500);
   };
 
   const handlePrintInvoice = async (order: any) => {
