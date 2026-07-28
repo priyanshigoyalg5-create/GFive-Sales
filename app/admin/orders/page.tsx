@@ -887,8 +887,8 @@ export default function AdminOrdersPage() {
 
       {/* PRINTABLE INVOICE TEMPLATE */}
       {selectedOrder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1000, overflow: 'hidden' }}>
-          <div ref={invoiceRef} style={{ width: '680px', padding: '24px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b', boxSizing: 'border-box' }}>
+        <div style={{ position: 'fixed', top: '-10000px', left: 0, width: '750px', zIndex: -1000, pointerEvents: 'none', opacity: 1 }}>
+          <div ref={invoiceRef} style={{ width: '750px', padding: '30px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
               <div>
                 <div style={{ fontSize: '32px', fontWeight: 'bold', letterSpacing: '1px', color: '#1e293b' }}>Sales order</div>
