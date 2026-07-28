@@ -73,6 +73,15 @@ export default function CustomerSamplePage() {
     rawPhotos.unshift(sample.imageUrl);
   }
 
+  // Also include any color-specific photos safely
+  if (sample.colorDetails && Array.isArray(sample.colorDetails)) {
+    sample.colorDetails.forEach((item: any) => {
+      if (item?.photoUrl && typeof item.photoUrl === 'string' && item.photoUrl.trim() !== '') {
+        rawPhotos.push(item.photoUrl);
+      }
+    });
+  }
+
   const samplePhotosList = Array.from(new Set(rawPhotos)).filter((url) => typeof url === 'string' && url.trim() !== '');
 
   const totalQuantity = Object.values(quantities).reduce((acc, curr) => acc + Number(curr || 0), 0);
@@ -189,7 +198,7 @@ export default function CustomerSamplePage() {
       if (agentName) text += `• *Agent:* ${agentName}\n`;
       if (customerRemarks) text += `• *Remarks:* ${customerRemarks}\n`;
       
-      text += `\n*COLOUR       QUANTITIES:*\n`;
+      text += `\n*COLOUR        QUANTITIES:*\n`;
       text += `--------------------------\n`;
 
       Object.entries(quantities).forEach(([color, qty]: [string, any]) => {
@@ -204,6 +213,7 @@ export default function CustomerSamplePage() {
       text += `-------------------------------\n`;
       text += `📷 *Design Image:* ${sample.imageUrl}`;
 
+      let sharedSuccessfully = false;
       if (navigator.share && sample.imageUrl) {
         try {
           const response = await fetch(sample.imageUrl);
@@ -215,15 +225,17 @@ export default function CustomerSamplePage() {
               text: text,
               files: [imageFile],
             });
-            return;
+            sharedSuccessfully = true;
           }
         } catch (err) {
           console.log('Image share failed, fallback to direct WhatsApp URL', err);
         }
       }
 
-      const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
-      window.location.href = waLink;
+      if (!sharedSuccessfully) {
+        const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
+        window.location.href = waLink;
+      }
 
     } catch (e) {
       console.warn('Error saving order record:', e);
@@ -484,12 +496,11 @@ export default function CustomerSamplePage() {
                   {hasPhoto ? (
                     <div 
                       onClick={() => {
-                        if (!samplePhotosList.includes(photoUrl)) {
-                          samplePhotosList.push(photoUrl);
-                        }
                         const foundIdx = samplePhotosList.indexOf(photoUrl);
-                        setActivePhotoIndex(foundIdx);
-                        setZoomedImageIndex(foundIdx);
+                        if (foundIdx !== -1) {
+                          setActivePhotoIndex(foundIdx);
+                          setZoomedImageIndex(foundIdx);
+                        }
                       }}
                       style={{
                         width: '46px',

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDoc, where, getDocs } from 'firebase/firestore';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -79,8 +79,6 @@ export default function AdminOrdersPage() {
     return () => unsubscribe();
   }, []);
 
-  // STRICT ORDERING: ALL MAIN SAMPLES FIRST ➔ ONLY DISTINCT COLOUR PHOTOS SECOND
-  // STRICT ORDERING: SAMPLE PHOTOS FIRST ➔ COLOUR PHOTOS SECOND (WITH DESIGN NO FALLBACK)
   const handleOpenGalleryModal = async (order: any) => {
     setGalleryDesignNo(order.designNumber || '');
     let mainSamples: string[] = [];
@@ -88,7 +86,6 @@ export default function AdminOrdersPage() {
     let sampleData: any = null;
 
     try {
-      // 1. First try by sampleId
       if (order.sampleId) {
         const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
         if (sSnap.exists()) {
@@ -96,7 +93,6 @@ export default function AdminOrdersPage() {
         }
       }
 
-      // 2. Fallback: If sampleId missing or not found, query by designNumber
       if (!sampleData && order.designNumber) {
         const q = query(collection(db, 'samples'), where('designNumber', '==', String(order.designNumber)));
         const qSnap = await getDocs(q);
@@ -105,7 +101,6 @@ export default function AdminOrdersPage() {
         }
       }
 
-      // Extract Main Sample Photos FIRST
       if (sampleData) {
         if (sampleData.sampleImages && Array.isArray(sampleData.sampleImages) && sampleData.sampleImages.length > 0) {
           mainSamples = sampleData.sampleImages.filter((u: string) => typeof u === 'string' && u.trim() !== '');
@@ -113,7 +108,6 @@ export default function AdminOrdersPage() {
           mainSamples = [sampleData.imageUrl];
         }
 
-        // Extract Colour Photos SECOND
         if (sampleData.colorDetails && Array.isArray(sampleData.colorDetails)) {
           sampleData.colorDetails.forEach((cd: any) => {
             if (cd.photoUrl && cd.photoUrl.trim() !== '' && !mainSamples.includes(cd.photoUrl)) {
@@ -126,7 +120,6 @@ export default function AdminOrdersPage() {
       console.warn('Error fetching sample images:', err);
     }
 
-    // Direct Order fallback if still empty
     if (mainSamples.length === 0) {
       if (order.colorPhotos) {
         Object.values(order.colorPhotos).forEach((u: any) => {
@@ -137,7 +130,6 @@ export default function AdminOrdersPage() {
       }
     }
 
-    // FINAL STRICT SEQUENCE: [Sample Photos...] ➔ [Colour Photos...]
     const finalSequence = Array.from(new Set([...mainSamples, ...customColorPhotos]));
 
     if (finalSequence.length === 0) {
@@ -148,6 +140,58 @@ export default function AdminOrdersPage() {
     setCurrentGalleryImages(finalSequence);
     setActiveImageIndex(0);
     setGalleryModalOpen(true);
+  };
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (filteredIds: string[]) => {
+    const allSelected = filteredIds.every((id) => selectedOrderIds.includes(id));
+    if (allSelected) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(filteredIds);
+    }
+  };
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      const docRef = doc(db, 'orders', orderId);
+      await updateDoc(docRef, { status: newStatus });
+    } catch (err) {
+      console.error('Failed to update status:', err);
+    }
+  };
+
+  const handleMoveToTrash = async (orderId: string) => {
+    try {
+      const docRef = doc(db, 'orders', orderId);
+      await updateDoc(docRef, { isTrashed: true });
+    } catch (err) {
+      console.error('Failed to move to trash:', err);
+    }
+  };
+
+  const handleRestoreFromTrash = async (orderId: string) => {
+    try {
+      const docRef = doc(db, 'orders', orderId);
+      await updateDoc(docRef, { isTrashed: false });
+    } catch (err) {
+      console.error('Failed to restore order:', err);
+    }
+  };
+
+  const handlePermanentDelete = async (orderId: string, displayOrderId: string) => {
+    if (confirm(`⚠️ Permanently delete order ${displayOrderId}?`)) {
+      try {
+        await deleteDoc(doc(db, 'orders', orderId));
+      } catch (err) {
+        console.error('Failed to permanently delete order:', err);
+      }
+    }
   };
 
   const handleBulkMoveToTrash = async () => {
@@ -346,19 +390,17 @@ export default function AdminOrdersPage() {
     }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
 
-  {/* Top Header */}
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
-    <div>
-      <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-        📊 Orders Dashboard
-      </h1>
-      <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>
-        Realtime customer orders & PDF invoice manager
-      </p>
-    </div>
-  </div>
-
-</div>
+        {/* Top Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+              📊 Orders Dashboard
+            </h1>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>
+              Realtime customer orders & PDF invoice manager
+            </p>
+          </div>
+        </div>
 
         {/* Sales Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
