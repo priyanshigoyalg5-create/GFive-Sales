@@ -211,7 +211,6 @@ export default function CustomerSamplePage() {
       text += `*TOTAL:* ${totalQuantity} pcs\n`;
       text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
       text += `-------------------------------\n`;
-      text += `📷 *Design Image:* ${sample.imageUrl}`;
 
       let sharedSuccessfully = false;
       if (navigator.share && sample.imageUrl) {
