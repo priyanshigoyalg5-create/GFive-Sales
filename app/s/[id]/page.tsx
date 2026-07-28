@@ -176,7 +176,7 @@ export default function CustomerSamplePage() {
         createdAt: serverTimestamp(),
       });
 
-      let text = `*-----------GFive KOLKATA-------------*\n`;
+      let text = `*GFive Kolkata*\n`;
       text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       text += `*Order No:* ${customOrderId}\n`;
       text += `*Design No:* ${sample.designNumber}\n`;
@@ -202,7 +202,6 @@ export default function CustomerSamplePage() {
       text += `*TOTAL:* ${totalQuantity} pcs\n`;
       text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
       text += `-------------------------------\n`;
-      text += `📷 *Design Image:* ${sample.imageUrl}`;
 
       let sharedSuccessfully = false;
       if (navigator.share && sample.imageUrl) {
