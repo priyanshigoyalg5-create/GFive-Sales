@@ -304,7 +304,7 @@ export default function AdminOrdersPage() {
                 <style>
                   * { box-sizing: border-box; }
                   body { margin: 0; padding: 15px; font-family: Arial, sans-serif; background: #ffffff; color: #000000; }
-                  img { max-width: 100% !important; height: auto !important; display: inline-block; }
+                  img { max-width: 100% !important; height: 100px !important; display: inline-block; }
                   table { width: 100%; border-collapse: collapse; }
                   th, td { border-bottom: 1px solid #ddd; padding: 8px; }
                   @media print {
