@@ -351,12 +351,11 @@ export default function AddSamplePage() {
                 )}
                 {!preview && (
                   <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
-                  />
+  type="file"
+  accept="image/*"
+  onChange={handleFileChange}
+  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+/>
                 )}
               </div>
             </div>
