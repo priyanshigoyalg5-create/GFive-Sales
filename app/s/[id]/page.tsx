@@ -64,22 +64,13 @@ export default function CustomerSamplePage() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>Loading sample details...</div>;
   if (!sample) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', fontWeight: '600' }}>Sample not found or removed.</div>;
 
-  // SAFE ARRAY MERGE: Collect all sample photos safely without duplicates
+  // STRICT SAMPLE PHOTOS ONLY: Filter out any colour photos, load ONLY admin uploaded sample images
   const rawPhotos: string[] = [];
   if (Array.isArray(sample.sampleImages)) {
     rawPhotos.push(...sample.sampleImages);
   }
   if (sample.imageUrl && !rawPhotos.includes(sample.imageUrl)) {
     rawPhotos.unshift(sample.imageUrl);
-  }
-
-  // Also include any color-specific photos safely
-  if (sample.colorDetails && Array.isArray(sample.colorDetails)) {
-    sample.colorDetails.forEach((item: any) => {
-      if (item?.photoUrl && typeof item.photoUrl === 'string' && item.photoUrl.trim() !== '') {
-        rawPhotos.push(item.photoUrl);
-      }
-    });
   }
 
   const samplePhotosList = Array.from(new Set(rawPhotos)).filter((url) => typeof url === 'string' && url.trim() !== '');
@@ -185,7 +176,7 @@ export default function CustomerSamplePage() {
         createdAt: serverTimestamp(),
       });
 
-      let text = `*GFive Kolkata*\n`;
+      let text = `*-----------GFive KOLKATA-------------*\n`;
       text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       text += `*Order No:* ${customOrderId}\n`;
       text += `*Design No:* ${sample.designNumber}\n`;
@@ -211,6 +202,7 @@ export default function CustomerSamplePage() {
       text += `*TOTAL:* ${totalQuantity} pcs\n`;
       text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
       text += `-------------------------------\n`;
+      text += `📷 *Design Image:* ${sample.imageUrl}`;
 
       let sharedSuccessfully = false;
       if (navigator.share && sample.imageUrl) {
@@ -495,11 +487,8 @@ export default function CustomerSamplePage() {
                   {hasPhoto ? (
                     <div 
                       onClick={() => {
-                        const foundIdx = samplePhotosList.indexOf(photoUrl);
-                        if (foundIdx !== -1) {
-                          setActivePhotoIndex(foundIdx);
-                          setZoomedImageIndex(foundIdx);
-                        }
+                        // Open color photo directly in Zoom modal without adding to top sample carousel
+                        setZoomedImageIndex(samplePhotosList.length);
                       }}
                       style={{
                         width: '46px',
@@ -726,7 +715,7 @@ export default function CustomerSamplePage() {
               fontWeight: '700',
               backdropFilter: 'blur(4px)'
             }}>
-              {zoomedImageIndex + 1} / {samplePhotosList.length} (Swipe 👈👉)
+              {(zoomedImageIndex % samplePhotosList.length) + 1} / {samplePhotosList.length} (Swipe 👈👉)
             </div>
           )}
 
@@ -759,8 +748,8 @@ export default function CustomerSamplePage() {
           {/* Zoomed Image Container */}
           <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90%', maxHeight: '85vh' }}>
             <img
-              src={samplePhotosList[zoomedImageIndex]}
-              alt={`Zoomed View ${zoomedImageIndex + 1}`}
+              src={samplePhotosList[zoomedImageIndex % samplePhotosList.length] || sample.imageUrl}
+              alt={`Zoomed View`}
               style={{
                 maxWidth: '100%',
                 maxHeight: '80vh',
