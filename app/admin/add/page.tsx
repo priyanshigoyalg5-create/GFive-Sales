@@ -25,12 +25,12 @@ export default function AddSamplePage() {
   const [work, setWork] = useState('');
   const [remarks, setRemarks] = useState('');
 
-  // Dynamic Multiple Sample Photos State (Separated from Colors)
+  // DYNAMIC MULTIPLE SAMPLE PHOTOS STATE
   const [samplePhotos, setSamplePhotos] = useState<SamplePhotoRow[]>([
-    { id: '1', file: null, preview: null }
+    { id: 'sample_1', file: null, preview: null }
   ]);
 
-  // Dynamic Colour Rows State (Purely Untouched)
+  // DYNAMIC COLOUR ROWS STATE (UNTOUCHED)
   const [colorRows, setColorRows] = useState<ColorRow[]>([
     { id: '1', name: '', photoUrl: '', photoFile: null }
   ]);
@@ -38,7 +38,7 @@ export default function AddSamplePage() {
   // Custom Toast State
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
-  // Custom Success Modal Popup State
+  // Success Modal State
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdSampleUrl, setCreatedSampleUrl] = useState('');
   const [createdSampleData, setCreatedSampleData] = useState<any>(null);
@@ -49,17 +49,17 @@ export default function AddSamplePage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Multiple Sample Photos Functions
+  // MULTIPLE SAMPLE PHOTO HANDLERS
   const handleAddSamplePhoto = () => {
     setSamplePhotos((prev) => [
       ...prev,
-      { id: Date.now().toString(), file: null, preview: null }
+      { id: `sample_${Date.now()}`, file: null, preview: null }
     ]);
   };
 
   const handleRemoveSamplePhoto = (id: string) => {
     if (samplePhotos.length === 1) {
-      triggerToast('At least 1 sample photo is required!', 'error');
+      triggerToast('At least 1 main sample photo is required!', 'error');
       return;
     }
     setSamplePhotos((prev) => prev.filter((p) => p.id !== id));
@@ -73,7 +73,7 @@ export default function AddSamplePage() {
     );
   };
 
-  // Dynamic Colour Row Functions (Original Logic)
+  // COLOUR ROW FUNCTIONS (ORIGINAL LOGIC)
   const handleAddColorRow = () => {
     setColorRows((prev) => [
       ...prev,
@@ -177,7 +177,7 @@ export default function AddSamplePage() {
 
       const validColorNames = processedColorDetails.map((c) => c.name);
 
-      // 3. Save to Firestore (Includes sampleImages array)
+      // 3. Save Payload with Array of Sample Images
       const samplePayload = {
         designNumber,
         price: Number(price),
@@ -186,8 +186,8 @@ export default function AddSamplePage() {
         remarks,
         colors: validColorNames,
         colorDetails: processedColorDetails,
-        imageUrl: mainImageUrl, // First/Primary image
-        sampleImages: uploadedSampleUrls, // Full array of sample photos for gallery swipe
+        imageUrl: mainImageUrl, // Primary main photo
+        sampleImages: uploadedSampleUrls, // ALL UPLOADED SAMPLE PHOTOS
         createdAt: serverTimestamp(),
       };
 
@@ -224,14 +224,13 @@ export default function AddSamplePage() {
       `👇 *Click link to view details & place order:*\n` +
       `${createdSampleUrl}`;
 
-    const mainFile = samplePhotos[0]?.file;
+    const firstPhotoFile = samplePhotos[0]?.file;
 
-    // Direct Phone Share (Photo + Caption attached together)
-    if (navigator.share && mainFile) {
+    if (navigator.share && firstPhotoFile) {
       try {
         await navigator.share({
           text: message,
-          files: [mainFile],
+          files: [firstPhotoFile],
         });
         return;
       } catch (err) {
@@ -239,7 +238,6 @@ export default function AddSamplePage() {
       }
     }
 
-    // Fallback
     window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
   };
 
@@ -299,14 +297,14 @@ export default function AddSamplePage() {
         }}>
           <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
-            {/* MULTIPLE SAMPLE PHOTOS SECTION WITH DYNAMIC ADD & REMOVE (CROSS X) */}
+            {/* MULTIPLE SAMPLE PHOTOS SECTION */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
                   Main Sample Photos *
                 </label>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
-                  ({samplePhotos.length} {samplePhotos.length === 1 ? 'photo' : 'photos'})
+                <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: '700' }}>
+                  {samplePhotos.length} {samplePhotos.length === 1 ? 'Photo' : 'Photos'}
                 </span>
               </div>
 
@@ -348,7 +346,7 @@ export default function AddSamplePage() {
                         <div>
                           <div style={{ fontSize: '26px', marginBottom: '4px' }}>📷</div>
                           <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>
-                            {index === 0 ? 'Tap to upload Main Sample Photo' : `Tap to upload Sample Photo #${index + 1}`}
+                            {index === 0 ? 'Tap to upload Main Photo' : `Tap to upload Photo #${index + 1}`}
                           </span>
                         </div>
                       )}
@@ -363,7 +361,7 @@ export default function AddSamplePage() {
                       )}
                     </div>
 
-                    {/* CROSS X BUTTON TO REMOVE PHOTO */}
+                    {/* RED CROSS X BUTTON TO REMOVE PHOTO */}
                     <button
                       type="button"
                       onClick={() => handleRemoveSamplePhoto(item.id)}
@@ -394,15 +392,15 @@ export default function AddSamplePage() {
                 ))}
               </div>
 
-              {/* ADD MORE SAMPLE PHOTO BUTTON */}
+              {/* BUTTON TO ADD MORE SAMPLE PHOTOS */}
               <button
                 type="button"
                 onClick={handleAddSamplePhoto}
                 style={{
                   marginTop: '10px',
-                  background: '#f8fafc',
-                  color: '#0f172a',
-                  border: '1.5px dashed #94a3b8',
+                  background: '#f0f9ff',
+                  color: '#0284c7',
+                  border: '1.5px dashed #0284c7',
                   padding: '10px 14px',
                   borderRadius: '10px',
                   fontSize: '13px',
@@ -467,7 +465,7 @@ export default function AddSamplePage() {
               </div>
             </div>
 
-            {/* DYNAMIC COLOURS (UNTOUCHED AND SEPARATE) */}
+            {/* DYNAMIC COLOURS (UNTOUCHED) */}
             <div>
               <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
                 Available Colours & Photos
