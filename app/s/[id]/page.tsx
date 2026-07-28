@@ -105,86 +105,106 @@ export default function CustomerSamplePage() {
   };
 
   const handlePlaceOrder = async (targetPhone: string) => {
-    if (totalQuantity <= 0) {
-      alert('Please enter quantity (pcs) for at least one color!');
-      return;
-    }
-    if (!firmName || !mobile || !city) {
-      alert('Please fill Firm Name, Mobile Number, and City!');
-      return;
-    }
+  if (totalQuantity <= 0) {
+    alert('Please enter quantity (pcs) for at least one color!');
+    return;
+  }
+  if (!firmName || !mobile || !city) {
+    alert('Please fill Firm Name, Mobile Number, and City!');
+    return;
+  }
 
-    try {
-      // Map Color Photos so Admin Invoice gets exact uploaded image (or main image if blank)
-      const colorPhotosMap: { [col: string]: string } = {};
-      colorList.forEach((item: any) => {
-        const cName = typeof item === 'string' ? item : item.name;
-        const cUrl = typeof item === 'object' && item.photoUrl && item.photoUrl.trim() !== '' 
-          ? item.photoUrl 
-          : (sample.imageUrl || '');
-        colorPhotosMap[cName] = cUrl;
-      });
+  try {
+    const customOrderId = await getNextOrderNumber();
 
-      // Generate clean Order ID (e.g. GFive#1)
-      const customOrderId = await getNextOrderNumber();
+    // Map Color Photos so Admin Invoice gets exact uploaded image
+    const colorPhotosMap: { [col: string]: string } = {};
+    colorList.forEach((item: any) => {
+      const cName = typeof item === 'string' ? item : item.name;
+      const cUrl = typeof item === 'object' && item.photoUrl && item.photoUrl.trim() !== '' 
+        ? item.photoUrl 
+        : (sample.imageUrl || '');
+      colorPhotosMap[cName] = cUrl;
+    });
 
-      // Save order to Firestore
-      await addDoc(collection(db, 'orders'), {
-        orderId: customOrderId,
-        sampleId,
-        designNumber: sample.designNumber,
-        price: sample.price,
-        firmName,
-        mobile,
-        city,
-        gstNo,
-        agentName,
-        remarks: customerRemarks,
-        items: quantities,
-        colorPhotos: colorPhotosMap,
-        totalQuantity,
-        totalAmount,
-        unit: 'pcs',
-        createdAt: serverTimestamp(),
-      });
+    // Save order to Firestore
+    await addDoc(collection(db, 'orders'), {
+      orderId: customOrderId,
+      sampleId,
+      designNumber: sample.designNumber,
+      price: sample.price,
+      firmName,
+      mobile,
+      city,
+      gstNo,
+      agentName,
+      remarks: customerRemarks,
+      items: quantities,
+      colorPhotos: colorPhotosMap,
+      totalQuantity,
+      totalAmount,
+      unit: 'pcs',
+      createdAt: serverTimestamp(),
+    });
 
-      // Formatted WhatsApp Message
-      let text = `*-----------GFive KOLKATA-------------*\n`;
-      text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
-      
-      text += `*Order No:* ${customOrderId}\n`;
-      text += `*Design No:* ${sample.designNumber}\n`;
-      text += `*Price:* ₹${sample.price}/pc\n\n`;
-      text += `*CUSTOMER DETAILS:*\n`;
-      text += `• *Firm:* ${firmName}\n`;
-      text += `• *Mobile:* ${mobile}\n`;
-      text += `• *City:* ${city}\n`;
-      if (gstNo) text += `• *GST No:* ${gstNo}\n`;
-      if (agentName) text += `• *Agent:* ${agentName}\n`;
-      if (customerRemarks) text += `• *Remarks:* ${customerRemarks}\n`;
-      
-      text += `\n*COLOUR       QUANTITIES:*\n`;
-      text += `--------------------------\n`;
+    // Message Content
+    let text = `*-----------GFive KOLKATA-------------*\n`;
+    text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
+    text += `*Order No:* ${customOrderId}\n`;
+    text += `*Design No:* ${sample.designNumber}\n`;
+    text += `*Price:* ₹${sample.price}/pc\n\n`;
+    text += `*CUSTOMER DETAILS:*\n`;
+    text += `• *Firm:* ${firmName}\n`;
+    text += `• *Mobile:* ${mobile}\n`;
+    text += `• *City:* ${city}\n`;
+    if (gstNo) text += `• *GST No:* ${gstNo}\n`;
+    if (agentName) text += `• *Agent:* ${agentName}\n`;
+    if (customerRemarks) text += `• *Remarks:* ${customerRemarks}\n`;
+    
+    text += `\n*COLOUR       QUANTITIES:*\n`;
+    text += `--------------------------\n`;
 
-      Object.entries(quantities).forEach(([color, qty]: [string, any]) => {
-        if (qty > 0) {
-          text += `• *${color}* -----------> *${qty} pcs*\n`;
+    Object.entries(quantities).forEach(([color, qty]: [string, any]) => {
+      if (qty > 0) {
+        text += `• *${color}* -----------> *${qty} pcs*\n`;
+      }
+    });
+
+    text += `-------------------------------\n`;
+    text += `*TOTAL:* ${totalQuantity} pcs\n`;
+    text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
+    text += `-------------------------------\n`;
+    text += `📷 *Design Image:* ${sample.imageUrl}`;
+
+    // TRY Native File Share (Admin Method)
+    if (navigator.share && sample.imageUrl) {
+      try {
+        // Fetch Image URL & Convert to File Object
+        const response = await fetch(sample.imageUrl);
+        const blob = await response.blob();
+        const imageFile = new File([blob], `Design_${sample.designNumber}.jpg`, { type: blob.type });
+
+        if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+          await navigator.share({
+            text: text,
+            files: [imageFile],
+          });
+          return; // Success via Native Share
         }
-      });
-
-      text += `-------------------------------\n`;
-      text += `*TOTAL:* ${totalQuantity} pcs\n`;
-      text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
-      text += `-------------------------------`;
-
-      const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
-      window.location.href = waLink;
-
-    } catch (e) {
-      console.warn('Error saving order record:', e);
-      alert('Order placing failed. Please try again!');
+      } catch (err) {
+        console.log('Image share failed, fallback to direct WhatsApp URL', err);
+      }
     }
-  };
+
+    // Direct WhatsApp Fallback Link (If Native Share Fails)
+    const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
+    window.location.href = waLink;
+
+  } catch (e) {
+    console.warn('Error saving order record:', e);
+    alert('Order placing failed. Please try again!');
+  }
+};
 
   return (
     <div style={{
