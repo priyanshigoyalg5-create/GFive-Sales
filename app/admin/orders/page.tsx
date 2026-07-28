@@ -879,7 +879,6 @@ export default function AdminOrdersPage() {
       )}
 
       {/* PRINTABLE INVOICE TEMPLATE */}
-      {/* PRINTABLE INVOICE TEMPLATE */}
       {selectedOrder && (
         <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1000, overflow: 'hidden' }}>
           <div ref={invoiceRef} style={{ width: '680px', padding: '24px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b', boxSizing: 'border-box' }}>
@@ -912,6 +911,8 @@ export default function AdminOrdersPage() {
             <div style={{ marginBottom: '24px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Billing Address</div>
               <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.firmName}</div>
+                            <div style={{ fontSize: '13px', color: '#334155' }}>Design No.: {selectedOrder.designNumber}</div>
+
               <div style={{ fontSize: '13px', color: '#334155' }}>Phone: {selectedOrder.mobile} | City: {selectedOrder.city}</div>
               {selectedOrder.gstNo && <div style={{ fontSize: '13px', color: '#334155' }}>GST: {selectedOrder.gstNo}</div>}
               {selectedOrder.agentName && <div style={{ fontSize: '13px', color: '#334155' }}>Agent: {selectedOrder.agentName}</div>}
