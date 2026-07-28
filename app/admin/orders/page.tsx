@@ -948,11 +948,11 @@ export default function AdminOrdersPage() {
                           <div>#{selectedOrder.designNumber}</div>
                           {photoUrl && (
                             <div style={{ marginTop: '6px' }}>
-                             <img 
+                            
                               //  src={photoUrl} 
                                 alt={selectedOrder.designNumber} 
                                 style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
-                              />
+                        
                             </div>
                           )}
                         </td>
