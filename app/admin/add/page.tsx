@@ -148,9 +148,10 @@ export default function AddSamplePage() {
             if (uploadedUrl) finalPhotoUrl = uploadedUrl;
           }
 
-          if (!finalPhotoUrl) {
-            finalPhotoUrl = mainImageUrl;
-          }
+          // If no custom photo file provided, keep photoUrl empty
+if (!row.photoFile) {
+  finalPhotoUrl = "";
+}
 
           return {
             name: row.name.trim(),

@@ -20,6 +20,9 @@ export default function CustomerSamplePage() {
   const [agentName, setAgentName] = useState('');
   const [customerRemarks, setCustomerRemarks] = useState('');
 
+  // Main Display Image State (Dynamic switch on color selection)
+  const [displayImage, setDisplayImage] = useState<string>('');
+
   // Image Zoom Modal State
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
@@ -35,6 +38,8 @@ export default function CustomerSamplePage() {
         if (snap.exists()) {
           const data = snap.data();
           setSample(data);
+          setDisplayImage(data.imageUrl || ''); // Default main photo
+
           const initialQty: { [col: string]: number } = {};
 
           // Extract colors
@@ -71,25 +76,27 @@ export default function CustomerSamplePage() {
     }));
   };
 
-  // Helper to extract color rows list from Firebase data
+  // Helper to extract color rows list (Fix: No automatic fake photo fallback)
   const getColorList = () => {
     if (sample.colorDetails && sample.colorDetails.length > 0) {
       return sample.colorDetails;
     }
-    return (sample.colors || []).map((c: string) => ({ name: c, photoUrl: sample.imageUrl || '' }));
+    return (sample.colors || []).map((c: string) => ({ name: c, photoUrl: '' }));
   };
 
   const colorList = getColorList();
 
-  // Unique Dynamic Sequential Order ID Generator (Format: GFive#2778, GFive#2779...)
+  // Unique Dynamic Sequential Order ID Generator
   const getNextOrderNumber = async () => {
     const counterRef = doc(db, 'counters', 'sales_orders');
     return await runTransaction(db, async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
       
-      let nextSeq = 0; // Starting base number
+      let nextSeq = 0; // Starts from 0, so first order is GFive#1
       if (counterDoc.exists()) {
         nextSeq = (counterDoc.data().currentSeq || 0) + 1;
+      } else {
+        nextSeq = 1;
       }
       
       transaction.set(counterRef, { currentSeq: nextSeq }, { merge: true });
@@ -108,18 +115,20 @@ export default function CustomerSamplePage() {
     }
 
     try {
-      // Map Color Photos so Admin Invoice gets exact image
+      // Map Color Photos so Admin Invoice gets exact uploaded image (or main image if blank)
       const colorPhotosMap: { [col: string]: string } = {};
       colorList.forEach((item: any) => {
         const cName = typeof item === 'string' ? item : item.name;
-        const cUrl = typeof item === 'object' ? (item.photoUrl || sample.imageUrl || '') : (sample.imageUrl || '');
+        const cUrl = typeof item === 'object' && item.photoUrl && item.photoUrl.trim() !== '' 
+          ? item.photoUrl 
+          : (sample.imageUrl || '');
         colorPhotosMap[cName] = cUrl;
       });
 
-      // Generate clean Order ID (e.g. GFive#2778)
+      // Generate clean Order ID (e.g. GFive#1)
       const customOrderId = await getNextOrderNumber();
 
-      // Save order to Firestore with custom unique orderId + colorPhotos
+      // Save order to Firestore
       await addDoc(collection(db, 'orders'), {
         orderId: customOrderId,
         sampleId,
@@ -132,14 +141,14 @@ export default function CustomerSamplePage() {
         agentName,
         remarks: customerRemarks,
         items: quantities,
-        colorPhotos: colorPhotosMap, // <--- SAVES COLOR PHOTOS FOR INVOICE
+        colorPhotos: colorPhotosMap,
         totalQuantity,
         totalAmount,
         unit: 'pcs',
         createdAt: serverTimestamp(),
       });
 
-      // Formatted WhatsApp Message with Clean Order ID
+      // Formatted WhatsApp Message
       let text = `*-----------GFive KOLKATA-------------*\n`;
       text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       
@@ -159,7 +168,7 @@ export default function CustomerSamplePage() {
 
       Object.entries(quantities).forEach(([color, qty]: [string, any]) => {
         if (qty > 0) {
-          text += `• *${color}*  ----------->  *${qty} pcs*\n`;
+          text += `• *${color}* -----------> *${qty} pcs*\n`;
         }
       });
 
@@ -181,8 +190,8 @@ export default function CustomerSamplePage() {
     <div style={{
       minHeight: '100vh',
       width: '100%',
-      background: 'radial-gradient(circle at top, #f8fafc 0%, #1ff3fe 100%)',
-      padding: '24px 14px',
+      background: '#f8fafc',
+      padding: '20px 14px',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'flex-start',
@@ -195,18 +204,18 @@ export default function CustomerSamplePage() {
           background: '#ffffff',
           borderRadius: '24px',
           padding: '14px',
-          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
           border: '1px solid #f1f5f9',
           marginBottom: '18px'
         }}>
           <div 
-            onClick={() => setZoomedImage(sample.imageUrl)}
-            style={{ position: 'relative', overflow: 'hidden', borderRadius: '16px', cursor: 'pointer' }}
+            onClick={() => setZoomedImage(displayImage || sample.imageUrl)}
+            style={{ position: 'relative', overflow: 'hidden', borderRadius: '16px', cursor: 'pointer', background: '#f1f5f9' }}
           >
             <img
-              src={sample.imageUrl}
+              src={displayImage || sample.imageUrl}
               alt={`Design ${sample.designNumber}`}
-              style={{ width: '100%', height: '310px', objectFit: 'cover', display: 'block' }}
+              style={{ width: '100%', maxHeight: '380px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
             />
             <span style={{
               position: 'absolute',
@@ -264,7 +273,7 @@ export default function CustomerSamplePage() {
           background: '#ffffff',
           borderRadius: '24px',
           padding: '20px',
-          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
           border: '1px solid #f1f5f9',
           marginBottom: '18px'
         }}>
@@ -277,7 +286,8 @@ export default function CustomerSamplePage() {
 
           {colorList.map((item: any) => {
             const colorName = typeof item === 'string' ? item : item.name;
-            const photoUrl = typeof item === 'object' ? item.photoUrl : sample.imageUrl;
+            const hasPhoto = typeof item === 'object' && item.photoUrl && item.photoUrl.trim() !== '';
+            const photoUrl = hasPhoto ? item.photoUrl : '';
 
             return (
               <div
@@ -295,20 +305,23 @@ export default function CustomerSamplePage() {
               >
                 {/* Left: Color Photo & Name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {photoUrl ? (
+                  {hasPhoto ? (
                     <div 
-                      onClick={() => setZoomedImage(photoUrl)}
+                      onClick={() => {
+                        setDisplayImage(photoUrl);
+                        setZoomedImage(photoUrl);
+                      }}
                       style={{
                         width: '46px',
                         height: '46px',
                         borderRadius: '10px',
                         overflow: 'hidden',
-                        border: '1.5px solid #cbd5e1',
+                        border: '1.5px solid #2563eb',
                         cursor: 'pointer',
                         flexShrink: 0,
                         position: 'relative'
                       }}
-                      title="Click to view full image"
+                      title="Click to view color photo"
                     >
                       <img 
                         src={photoUrl} 
@@ -383,7 +396,7 @@ export default function CustomerSamplePage() {
           background: '#ffffff',
           borderRadius: '24px',
           padding: '20px',
-          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
           border: '1px solid #f1f5f9'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -394,7 +407,6 @@ export default function CustomerSamplePage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Firm Name */}
             <input
               type="text"
               placeholder="Firm / Company Name *"
@@ -413,7 +425,6 @@ export default function CustomerSamplePage() {
               }}
             />
 
-            {/* Mobile Number & City */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <input
                 type="tel"
@@ -451,7 +462,6 @@ export default function CustomerSamplePage() {
               />
             </div>
 
-            {/* GST No. (Optional) */}
             <input
               type="text"
               placeholder="GST No. (Optional)"
@@ -470,7 +480,6 @@ export default function CustomerSamplePage() {
               }}
             />
 
-            {/* Agent Name (Optional) */}
             <input
               type="text"
               placeholder="Agent Name (Optional)"
@@ -489,7 +498,6 @@ export default function CustomerSamplePage() {
               }}
             />
 
-            {/* Remarks (Optional) */}
             <input
               type="text"
               placeholder="Remarks (Optional)"
@@ -509,7 +517,6 @@ export default function CustomerSamplePage() {
             />
           </div>
 
-          {/* WhatsApp Order Button */}
           <button
             onClick={() => handlePlaceOrder(PHONE_NUMBER_1)}
             style={{
