@@ -64,7 +64,7 @@ export default function CustomerSamplePage() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>Loading sample details...</div>;
   if (!sample) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', fontWeight: '600' }}>Sample not found or removed.</div>;
 
-  // SAFE ARRAY MERGE: Collect ONLY main sample photos without color photos
+  // SAFE ARRAY MERGE: Collect ONLY main sample photos without color photos for the main carousel
   const rawPhotos: string[] = [];
   if (Array.isArray(sample.sampleImages)) {
     rawPhotos.push(...sample.sampleImages);
@@ -74,6 +74,16 @@ export default function CustomerSamplePage() {
   }
 
   const samplePhotosList = Array.from(new Set(rawPhotos)).filter((url) => typeof url === 'string' && url.trim() !== '');
+
+  // Expanded photos list used specifically for the Zoom Modal to include color variant photos on-demand
+  const allModalPhotos = [...samplePhotosList];
+  if (sample.colorDetails && Array.isArray(sample.colorDetails)) {
+    sample.colorDetails.forEach((item: any) => {
+      if (item?.photoUrl && typeof item.photoUrl === 'string' && item.photoUrl.trim() !== '' && !allModalPhotos.includes(item.photoUrl)) {
+        allModalPhotos.push(item.photoUrl);
+      }
+    });
+  }
 
   const totalQuantity = Object.values(quantities).reduce((acc, curr) => acc + Number(curr || 0), 0);
   const totalAmount = totalQuantity * Number(sample.price || 0);
@@ -108,14 +118,33 @@ export default function CustomerSamplePage() {
     setActivePhotoIndex((prev) => (prev - 1 + samplePhotosList.length) % samplePhotosList.length);
   };
 
+  // Zoom Modal Carousel Navigation Logic
+  const handleNextZoomPhoto = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (allModalPhotos.length === 0 || zoomedImageIndex === null) return;
+    setZoomedImageIndex((prev) => (prev !== null ? (prev + 1) % allModalPhotos.length : 0));
+  };
+
+  const handlePrevZoomPhoto = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (allModalPhotos.length === 0 || zoomedImageIndex === null) return;
+    setZoomedImageIndex((prev) => (prev !== null ? (prev - 1 + allModalPhotos.length) % allModalPhotos.length : 0));
+  };
+
   // Touch Handlers for Mobile Swipe
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.targetTouches[0].clientX);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEndX(e.targetTouches[0].clientX);
   const handleTouchEnd = () => {
     if (!touchStartX || !touchEndX) return;
     const distance = touchStartX - touchEndX;
-    if (distance > 40) handleNextPhoto();
-    if (distance < -40) handlePrevPhoto();
+    if (distance > 40) {
+      if (zoomedImageIndex !== null) handleNextZoomPhoto();
+      else handleNextPhoto();
+    }
+    if (distance < -40) {
+      if (zoomedImageIndex !== null) handlePrevZoomPhoto();
+      else handlePrevPhoto();
+    }
     setTouchStartX(0);
     setTouchEndX(0);
   };
@@ -486,9 +515,8 @@ export default function CustomerSamplePage() {
                   {hasPhoto ? (
                     <div 
                       onClick={() => {
-                        const foundIdx = samplePhotosList.indexOf(photoUrl);
+                        const foundIdx = allModalPhotos.indexOf(photoUrl);
                         if (foundIdx !== -1) {
-                          setActivePhotoIndex(foundIdx);
                           setZoomedImageIndex(foundIdx);
                         }
                       }}
@@ -502,7 +530,7 @@ export default function CustomerSamplePage() {
                         flexShrink: 0,
                         position: 'relative'
                       }}
-                      title="Click to view color photo"
+                      title="Click to zoom color photo"
                     >
                       <img 
                         src={photoUrl} 
@@ -703,7 +731,7 @@ export default function CustomerSamplePage() {
           </button>
 
           {/* Image Index Counter Badge */}
-          {samplePhotosList.length > 1 && (
+          {allModalPhotos.length > 1 && (
             <div style={{
               position: 'absolute',
               top: '24px',
@@ -717,14 +745,14 @@ export default function CustomerSamplePage() {
               fontWeight: '700',
               backdropFilter: 'blur(4px)'
             }}>
-              {zoomedImageIndex + 1} / {samplePhotosList.length} (Swipe 👈👉)
+              {zoomedImageIndex + 1} / {allModalPhotos.length} (Swipe 👈👉)
             </div>
           )}
 
           {/* Left Arrow Button */}
-          {samplePhotosList.length > 1 && (
+          {allModalPhotos.length > 1 && (
             <button
-              onClick={handlePrevPhoto}
+              onClick={handlePrevZoomPhoto}
               style={{
                 position: 'absolute',
                 left: '12px',
@@ -750,7 +778,7 @@ export default function CustomerSamplePage() {
           {/* Zoomed Image Container */}
           <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90%', maxHeight: '85vh' }}>
             <img
-              src={samplePhotosList[zoomedImageIndex]}
+              src={allModalPhotos[zoomedImageIndex]}
               alt={`Zoomed View ${zoomedImageIndex + 1}`}
               style={{
                 maxWidth: '100%',
@@ -765,9 +793,9 @@ export default function CustomerSamplePage() {
           </div>
 
           {/* Right Arrow Button */}
-          {samplePhotosList.length > 1 && (
+          {allModalPhotos.length > 1 && (
             <button
-              onClick={handleNextPhoto}
+              onClick={handleNextZoomPhoto}
               style={{
                 position: 'absolute',
                 right: '12px',
