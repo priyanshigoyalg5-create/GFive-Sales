@@ -19,7 +19,7 @@ export default function AdminOrdersPage() {
   // Multi-Selection State
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
-  // Amazon-style Image Preview Gallery Modal State
+  // Gallery Modal State
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [currentGalleryImages, setCurrentGalleryImages] = useState<string[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -30,7 +30,6 @@ export default function AdminOrdersPage() {
   // High-Res Logo URL
   const GFIVE_LOGO_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-9AdJ4aF84PW7lWlDW1mJweHreNhFnUsvDMKlRhnT&s';
 
-  // Base64 Converter
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
     if (!imageUrl) return '';
     try {
@@ -80,54 +79,90 @@ export default function AdminOrdersPage() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch sample photos: MAIN SAMPLE PHOTOS FIRST, THEN COLOR PHOTOS
-  // Fetch sample photos: STRICT SAMPLE PHOTOS FIRST -> COLOR PHOTOS SECOND
+  // STRICT ORDERING: ALL MAIN SAMPLES FIRST ➔ ONLY DISTINCT COLOUR PHOTOS SECOND
   const handleOpenGalleryModal = async (order: any) => {
     setGalleryDesignNo(order.designNumber || '');
-    let mainSamplePhotos: string[] = [];
-    let individualColorPhotos: string[] = [];
+    let mainSamples: string[] = [];
+    let customColorPhotos: string[] = [];
 
-    // 1. Fetch Main Sample Photos FIRST from Sample Document
     if (order.sampleId) {
       try {
         const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
         if (sSnap.exists()) {
           const sData = sSnap.data();
+
+          // 1. Get All Uploaded Main Samples
           if (sData.sampleImages && Array.isArray(sData.sampleImages) && sData.sampleImages.length > 0) {
-            mainSamplePhotos = sData.sampleImages.filter((u: string) => u && u.trim() !== '');
+            mainSamples = sData.sampleImages.filter((u: string) => typeof u === 'string' && u.trim() !== '');
           } else if (sData.imageUrl) {
-            mainSamplePhotos = [sData.imageUrl];
+            mainSamples = [sData.imageUrl];
+          }
+
+          // 2. Extract Individual Color Photos that are NOT part of main sample photos
+          if (sData.colorDetails && Array.isArray(sData.colorDetails)) {
+            sData.colorDetails.forEach((cd: any) => {
+              if (cd.photoUrl && cd.photoUrl.trim() !== '' && !mainSamples.includes(cd.photoUrl)) {
+                customColorPhotos.push(cd.photoUrl);
+              }
+            });
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch sample main photos:', err);
+        console.warn('Failed fetching sample doc:', err);
       }
     }
 
-    // Fallback if mainSamplePhotos is still empty
-    if (mainSamplePhotos.length === 0 && order.imageUrl) {
-      mainSamplePhotos = [order.imageUrl];
+    // Fallback if sampleId was missing in legacy order
+    if (mainSamples.length === 0) {
+      if (order.imageUrl) mainSamples.push(order.imageUrl);
+      if (order.colorPhotos) {
+        Object.values(order.colorPhotos).forEach((u: any) => {
+          if (typeof u === 'string' && u.trim() !== '' && !mainSamples.includes(u)) {
+            customColorPhotos.push(u);
+          }
+        });
+      }
     }
 
-    // 2. Fetch Individual Colour Photos SECOND (Exclude images already present in main samples)
-    if (order.colorPhotos) {
-      const colorUrls = Object.values(order.colorPhotos).filter(
-        (u: any) => typeof u === 'string' && u.trim() !== '' && !mainSamplePhotos.includes(u)
-      ) as string[];
-      individualColorPhotos = Array.from(new Set(colorUrls));
-    }
+    // Combine: [Sample 1, Sample 2...] ➔ [Colour 1, Colour 2...]
+    const finalSequence = Array.from(new Set([...mainSamples, ...customColorPhotos]));
 
-    // FINAL STRICT SEQUENCE: [Sample Photo 1, Sample Photo 2...] -> [Colour Photos...]
-    const finalOrderedGallery = [...mainSamplePhotos, ...individualColorPhotos];
-
-    if (finalOrderedGallery.length === 0) {
-      alert('No preview photos found for this order.');
+    if (finalSequence.length === 0) {
+      alert('No sample photos found for this design.');
       return;
     }
 
-    setCurrentGalleryImages(finalOrderedGallery);
+    setCurrentGalleryImages(finalSequence);
     setActiveImageIndex(0);
     setGalleryModalOpen(true);
+  };
+
+  const handleStatusChange = async (orderDocId: string, newStatus: string) => {
+    try {
+      const orderRef = doc(db, 'orders', orderDocId);
+      await updateDoc(orderRef, { status: newStatus });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status.');
+    }
+  };
+
+  const handleMoveToTrash = async (orderDocId: string) => {
+    try {
+      const orderRef = doc(db, 'orders', orderDocId);
+      await updateDoc(orderRef, { isTrashed: true });
+    } catch (err) {
+      console.error('Failed to move to trash:', err);
+    }
+  };
+
+  const handleRestoreFromTrash = async (orderDocId: string) => {
+    try {
+      const orderRef = doc(db, 'orders', orderDocId);
+      await updateDoc(orderRef, { isTrashed: false });
+    } catch (err) {
+      console.error('Failed to restore order:', err);
+    }
   };
 
   const handlePermanentDelete = async (orderDocId: string, orderIdStr: string) => {
@@ -251,7 +286,6 @@ export default function AdminOrdersPage() {
     }, 500);
   };
 
-  // PRINT INVOICE FIXED FOR LAPTOP & MOBILE (Converts images to Base64)
   const handlePrintInvoice = async (order: any) => {
     setSelectedOrder(order);
     setTimeout(() => {
@@ -615,7 +649,7 @@ export default function AdminOrdersPage() {
                     })}
                   </div>
 
-                  {/* BOTTOM ACTION BUTTONS - VIEW SAMPLES ALWAYS VISIBLE */}
+                  {/* BOTTOM ACTION BUTTONS */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '8px' }}>
                     {isTrashed ? (
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -634,8 +668,6 @@ export default function AdminOrdersPage() {
 
                     {!isTrashed && (
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                        
-                        {/* 📷 VIEW SAMPLES BUTTON */}
                         <button
                           type="button"
                           onClick={() => handleOpenGalleryModal(order)}
@@ -695,7 +727,7 @@ export default function AdminOrdersPage() {
                             gap: '6px'
                           }}
                         >
-                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating...' : `📄 Download Invoice (${displayOrderId})`}
+                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating...' : `📄 Invoice (${displayOrderId})`}
                         </button>
                       </div>
                     )}
