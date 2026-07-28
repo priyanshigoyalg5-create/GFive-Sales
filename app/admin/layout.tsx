@@ -7,66 +7,87 @@ import { usePathname } from 'next/navigation';
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  const navItems = [
-    { name: '📊 Orders Dashboard', path: '/admin/orders' },
-    { name: '➕ Add Sample', path: '/admin/add' },
-  ];
-
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#ffffff' }}>
       
-      {/* 🔝 Top Navigation Bar */}
+      {/* TOP NAVIGATION HEADER BAR */}
       <header style={{
-        background: '#0f172a',
-        color: '#ffffff',
-        padding: '0 24px',
-        height: '64px',
+        background: '#0a0f1d',
+        borderBottom: '1px solid #1e293b',
+        padding: '12px 20px',
         display: 'flex',
+        justifyContent: 'flex-end',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000
+        gap: '10px'
       }}>
-        {/* Brand Name */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#38bdf8' }}>GFive Sales</h2>
-          <span style={{ fontSize: '12px', background: '#1e293b', padding: '4px 8px', borderRadius: '6px', color: '#94a3b8' }}>Admin</span>
-        </div>
+        
+        {/* 1. ORDERS DASHBOARD BUTTON */}
+        <Link 
+          href="/admin/orders" 
+          style={{
+            background: pathname === '/admin/orders' ? '#2563eb' : 'transparent',
+            color: '#ffffff',
+            padding: '8px 16px',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '700',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+        >
+          📊 Orders Dashboard
+        </Link>
 
-        {/* Navigation Tabs */}
-        <nav style={{ display: 'flex', gap: '12px' }}>
-          {navItems.map((item) => {
-            const isActive = pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  color: isActive ? '#ffffff' : '#94a3b8',
-                  background: isActive ? '#2563eb' : 'transparent',
-                  textDecoration: 'none',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* 2. ALL SAMPLES BUTTON (NEWLY ADDED) */}
+        <Link 
+          href="/admin/samples" 
+          style={{
+            background: pathname === '/admin/samples' ? '#2563eb' : 'transparent',
+            color: '#ffffff',
+            padding: '8px 16px',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '700',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+        >
+          🛍️ All Samples
+        </Link>
+
+        {/* 3. ADD SAMPLE BUTTON */}
+        <Link 
+          href="/admin/add" 
+          style={{
+            background: pathname === '/admin/add' ? '#2563eb' : 'transparent',
+            color: '#ffffff',
+            padding: '8px 16px',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '700',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+        >
+          ➕ Add Sample
+        </Link>
+
       </header>
 
-      {/* Main Content (Full Width No Overlap) */}
-      <main style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+      {/* Main Page Content Container */}
+      <main style={{ background: '#f8fafc', minHeight: 'calc(100vh - 60px)' }}>
         {children}
       </main>
+
     </div>
   );
 }
