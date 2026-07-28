@@ -271,21 +271,21 @@ export default function AdminOrdersPage() {
           const fileName = `${displayOrderId.replace('#', '_')}.pdf`;
 
           const opt = {
-            margin: 0.2,
+            margin: [0.2, 0.2, 0.2, 0.2],
             filename: fileName,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+            html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
             jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
           };
 
-          await html2pdf().set(opt).from(element).save();
+          await html2pdf().from(element).set(opt).save();
         }
       } catch (err) {
         console.error('Invoice PDF Download Failed:', err);
       } finally {
         setIsGeneratingPdf(false);
       }
-    }, 500);
+    }, 600);
   };
 
   const handlePrintInvoice = async (order: any) => {
@@ -300,14 +300,15 @@ export default function AdminOrdersPage() {
             <html>
               <head>
                 <title>Invoice_${order.orderId || order.id}</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
                   * { box-sizing: border-box; }
-                  body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #ffffff; color: #000000; }
+                  body { margin: 0; padding: 15px; font-family: Arial, sans-serif; background: #ffffff; color: #000000; }
                   img { max-width: 100% !important; height: auto !important; display: inline-block; }
                   table { width: 100%; border-collapse: collapse; }
                   th, td { border-bottom: 1px solid #ddd; padding: 8px; }
                   @media print {
-                    @page { margin: 0.3in; }
+                    @page { margin: 0.3in; size: auto; }
                     body { padding: 0; }
                   }
                 </style>
@@ -319,16 +320,19 @@ export default function AdminOrdersPage() {
                     setTimeout(function() {
                       window.print();
                       window.close();
-                    }, 400);
+                    }, 500);
                   };
                 </script>
               </body>
             </html>
           `);
           printWindow.document.close();
+        } else {
+          // Mobile Fallback agar popup blocked ho
+          window.print();
         }
       }
-    }, 300);
+    }, 400);
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -875,10 +879,10 @@ export default function AdminOrdersPage() {
       )}
 
       {/* PRINTABLE INVOICE TEMPLATE */}
+      {/* PRINTABLE INVOICE TEMPLATE */}
       {selectedOrder && (
-        <div style={{ position: 'fixed', left: '-9999px', top: '0', width: '750px', zIndex: -100 }}>
-          <div ref={invoiceRef} style={{ width: '750px', padding: '40px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b' }}>
-            
+        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1000, overflow: 'hidden' }}>
+          <div ref={invoiceRef} style={{ width: '680px', padding: '24px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
               <div>
                 <div style={{ fontSize: '32px', fontWeight: 'bold', letterSpacing: '1px', color: '#1e293b' }}>Sales order</div>
