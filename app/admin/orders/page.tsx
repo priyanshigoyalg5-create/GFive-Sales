@@ -345,18 +345,20 @@ export default function AdminOrdersPage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        
-        {/* Top Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              📊 Orders Dashboard
-            </h1>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
-              Realtime customer orders & PDF invoice manager
-            </p>
-          </div>
-        </div>
+
+  {/* Top Header */}
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+    <div>
+      <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+        📊 Orders Dashboard
+      </h1>
+      <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>
+        Realtime customer orders & PDF invoice manager
+      </p>
+    </div>
+  </div>
+
+</div>
 
         {/* Sales Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
