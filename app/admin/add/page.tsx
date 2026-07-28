@@ -195,19 +195,34 @@ export default function AddSamplePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shareToWhatsApp = () => {
-    if (!createdSampleData || !createdSampleUrl) return;
+  const shareToWhatsApp = async () => {
+  if (!createdSampleData || !createdSampleUrl) return;
 
-    const message = `*NEW FABRIC SAMPLE*\n\n` +
-      `*Design No:* ${createdSampleData.designNumber}\n` +
-      `*Fabric:* ${createdSampleData.fabric || 'N/A'}\n` +
-      `*Work:* ${createdSampleData.work || 'N/A'}\n` +
-      `*Rate:* ₹${createdSampleData.price}/pc\n\n` +
-      `👇 *Click link to view details & place order:*\n` +
-      `${createdSampleUrl}`;
+  const message = `*Gfive -Kolkata*\n` +
+    `*NEW UNSTITCHED SUIT SAMPLE*\n\n` +
+    `*Design No:* ${createdSampleData.designNumber}\n` +
+    `*Rate:* ₹${createdSampleData.price}/pc\n` +
+    `*Fabric:* ${createdSampleData.fabric || 'N/A'}\n` +
+    `*Work:* ${createdSampleData.work || 'N/A'}\n\n` +
+    `👇 *Click link to view details & place order:*\n` +
+    `${createdSampleUrl}`;
 
-    window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-  };
+  // 1-TAP SOLUTION: Direct Phone Share (Photo + Caption attached together)
+  if (navigator.share && file) {
+    try {
+      await navigator.share({
+        text: message,
+        files: [file], // Main Uploaded Image File
+      });
+      return;
+    } catch (err) {
+      console.log('Share canceled or not supported', err);
+    }
+  }
+
+  // Fallback for laptops/desktops
+  window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+};
 
   return (
     <div style={{
