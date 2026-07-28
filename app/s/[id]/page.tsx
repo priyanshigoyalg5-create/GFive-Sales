@@ -196,6 +196,7 @@ export default function CustomerSamplePage() {
         city,
         gstNo,
         agentName,
+        salesPerson: sample.salesPerson || 'N/A',
         remarks: customerRemarks,
         items: quantities,
         colorPhotos: colorPhotosMap,
@@ -209,7 +210,8 @@ export default function CustomerSamplePage() {
       text += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
       text += `*Order No:* ${customOrderId}\n`;
       text += `*Design No:* ${sample.designNumber}\n`;
-      text += `*Price:* ₹${sample.price}/pc\n\n`;
+      text += `*Price:* ₹${sample.price}/pc\n`;
+      text += `*Sales Person:* ${sample.salesPerson || 'N/A'}\n\n`;
       text += `*CUSTOMER DETAILS:*\n`;
       text += `• *Firm:* ${firmName}\n`;
       text += `• *Mobile:* ${mobile}\n`;
@@ -451,9 +453,9 @@ export default function CustomerSamplePage() {
                   <strong style={{ color: '#0f172a' }}>Work:</strong> {sample.work}
                 </p>
               )}
-              {sample.remarks && (
-                <p style={{ color: '#64748b', fontSize: '13px', marginTop: '6px', fontStyle: 'italic' }}>
-                  {sample.remarks}
+              {sample.salesPerson && (
+                <p style={{ color: '#0284c7', fontSize: '14px', fontWeight: '700', marginTop: '6px' }}>
+                  Sales Person: {sample.salesPerson}
                 </p>
               )}
             </div>
