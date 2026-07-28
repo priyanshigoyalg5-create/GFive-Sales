@@ -928,9 +928,9 @@ export default function AdminOrdersPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', textAlign: 'left' }}>
-                  <th style={{ padding: '10px' }}>Item / Design</th>
+                  <th style={{ padding: '10px', width: '210px' }}>Item / Design Photos</th>
                   <th style={{ padding: '10px' }}>Color Name</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Color Preview</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Colour Photo</th>
                   <th style={{ padding: '10px', textAlign: 'center' }}>Qty</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Rate</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Amount</th>
@@ -939,22 +939,28 @@ export default function AdminOrdersPage() {
               <tbody>
                 {selectedOrder.items && Object.entries(selectedOrder.items).map(([col, qty]: [string, any], index: number) => {
                   if (qty <= 0) return null;
-                  const photoUrl = selectedOrder.colorPhotos?.[col] || '';
+                  const colorPhotoUrl = selectedOrder.colorPhotos?.[col] || '';
+
+                  // Order ke andar save ki gayi saari sample photos nikalna (fallback ke sath)
+                  const allDesignPhotos = selectedOrder.sampleImages && Array.isArray(selectedOrder.sampleImages) && selectedOrder.sampleImages.length > 0
+                    ? selectedOrder.sampleImages
+                    : [selectedOrder.imageUrl || colorPhotoUrl].filter(Boolean);
 
                   return (
                     <tr key={col} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       {index === 0 ? (
-                        <td style={{ padding: '12px 10px', fontWeight: 'bold', verticalAlign: 'middle' }} rowSpan={Object.keys(selectedOrder.items).filter(k => selectedOrder.items[k] > 0).length}>
-                          <div>#{selectedOrder.designNumber}</div>
-                          {photoUrl && (
-                            <div style={{ marginTop: '6px' }}>
+                        <td style={{ padding: '12px 10px', fontWeight: 'bold', verticalAlign: 'top' }} rowSpan={Object.keys(selectedOrder.items).filter(k => selectedOrder.items[k] > 0).length}>
+                          <div style={{ marginBottom: '6px', fontSize: '13px', color: '#0f172a' }}>#{selectedOrder.designNumber}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {allDesignPhotos.map((imgUrl: string, imgIdx: number) => (
                               <img 
-                                src={photoUrl} 
-                                alt={selectedOrder.designNumber} 
-                                style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
+                                key={imgIdx}
+                                src={imgUrl} 
+                                alt={`Design ${selectedOrder.designNumber} - ${imgIdx + 1}`} 
+                                style={{ width: '45px', height: '55px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
                               />
-                            </div>
-                          )}
+                            ))}
+                          </div>
                         </td>
                       ) : null}
 
@@ -963,16 +969,14 @@ export default function AdminOrdersPage() {
                       </td>
 
                       <td style={{ padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        {photoUrl ? (
+                        {colorPhotoUrl ? (
                           <img 
-                            src={photoUrl} 
+                            src={colorPhotoUrl} 
                             alt={col} 
-                            style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1', display: 'inline-block' }} 
+                            style={{ width: '38px', height: '38px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1', display: 'inline-block' }} 
                           />
                         ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: '#f1f5f9', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '14px' }}>
-                            🎨
-                          </div>
+                          <span style={{ color: '#94a3b8' }}>-</span>
                         )}
                       </td>
 
@@ -981,7 +985,7 @@ export default function AdminOrdersPage() {
                       </td>
 
                       <td style={{ padding: '12px 10px', textAlign: 'right', verticalAlign: 'middle' }}>
-                        ₹{selectedOrder.price}.00/pc
+                        ₹{selectedOrder.price}.00
                       </td>
 
                       <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', verticalAlign: 'middle' }}>
