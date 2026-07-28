@@ -9,6 +9,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { name: '📊 Orders Dashboard', path: '/admin/orders' },
+    { name: '🛍️ All Samples', path: '/admin/samples' },
     { name: '➕ Add Sample', path: '/admin/add' },
   ];
 
@@ -63,10 +64,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
       </header>
 
-      {/* Main Content (Full Width No Overlap) */}
+      {/* Main Content */}
       <main style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
         {children}
       </main>
     </div>
   );
-}git
+}
