@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -19,12 +19,18 @@ export default function AdminOrdersPage() {
   // Multi-Selection State
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
+  // Amazon-style Image Preview Gallery Modal State
+  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
+  const [currentGalleryImages, setCurrentGalleryImages] = useState<string[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [galleryDesignNo, setGalleryDesignNo] = useState('');
+
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   // High-Res Logo URL
   const GFIVE_LOGO_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-9AdJ4aF84PW7lWlDW1mJweHreNhFnUsvDMKlRhnT&s';
 
-  // Base64 Converter for html2canvas
+  // Base64 Converter
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
     try {
       const res = await fetch(imageUrl);
@@ -72,6 +78,44 @@ export default function AdminOrdersPage() {
 
     return () => unsubscribe();
   }, []);
+
+  // Fetch sample photos for Amazon-style Preview Modal
+  const handleOpenGalleryModal = async (order: any) => {
+    setGalleryDesignNo(order.designNumber || '');
+    let imagesList: string[] = [];
+
+    // Check if colorPhotos / items are available
+    if (order.colorPhotos) {
+      const urls = Object.values(order.colorPhotos).filter((u: any) => typeof u === 'string' && u.trim() !== '') as string[];
+      imagesList = Array.from(new Set(urls));
+    }
+
+    // Also fetch sample document to get all original sampleImages uploaded
+    if (order.sampleId) {
+      try {
+        const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
+        if (sSnap.exists()) {
+          const sData = sSnap.data();
+          if (sData.sampleImages && Array.isArray(sData.sampleImages)) {
+            imagesList = Array.from(new Set([...imagesList, ...sData.sampleImages]));
+          } else if (sData.imageUrl) {
+            imagesList = Array.from(new Set([...imagesList, sData.imageUrl]));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch original sample gallery photos:', err);
+      }
+    }
+
+    if (imagesList.length === 0) {
+      alert('No preview photos found for this sample.');
+      return;
+    }
+
+    setCurrentGalleryImages(imagesList);
+    setActiveImageIndex(0);
+    setGalleryModalOpen(true);
+  };
 
   const handleStatusChange = async (orderDocId: string, newStatus: string) => {
     try {
@@ -209,7 +253,7 @@ export default function AdminOrdersPage() {
           const fileName = `${displayOrderId.replace('#', '_')}.pdf`;
 
           const opt = {
-            margin: 0.3,
+            margin: 0.2,
             filename: fileName,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, allowTaint: true },
@@ -227,6 +271,7 @@ export default function AdminOrdersPage() {
     }, 500);
   };
 
+  // MOBILE-FRIENDLY FIXED PRINT FUNCTION
   const handlePrintInvoice = (order: any) => {
     setSelectedOrder(order);
     setTimeout(() => {
@@ -234,18 +279,23 @@ export default function AdminOrdersPage() {
         const printWindow = window.open('', '_blank');
         if (printWindow) {
           printWindow.document.write(`
+            <!DOCTYPE html>
             <html>
               <head>
                 <title>Invoice_${order.orderId || order.id}</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
-                  body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+                  * { box-sizing: border-box; }
+                  body { margin: 0; padding: 15px; font-family: Arial, sans-serif; background: #fff; color: #000; }
+                  img { max-width: 100%; height: auto; }
                   @media print {
-                    @page { margin: 0.3in; }
+                    @page { margin: 0.2in; size: auto; }
+                    body { margin: 0; padding: 0; }
                   }
                 </style>
               </head>
               <body>
-                ${invoiceRef.current.innerHTML}
+                <div>${invoiceRef.current.innerHTML}</div>
               </body>
             </html>
           `);
@@ -254,10 +304,10 @@ export default function AdminOrdersPage() {
           setTimeout(() => {
             printWindow.print();
             printWindow.close();
-          }, 300);
+          }, 400);
         }
       }
-    }, 300);
+    }, 400);
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -278,10 +328,9 @@ export default function AdminOrdersPage() {
       if (searchMode === 'orderId') {
         const fullOrderIdStr = order.orderId || `GFive#${order.id.substring(0, 5)}`;
         const orderDigitsOnly = fullOrderIdStr.replace(/\D/g, '');
-        const hasText = /[a-zA-Z]/.test(rawSearch);
         const cleanQuery = rawSearch.replace(/\D/g, '');
 
-        if (hasText || cleanQuery === '') {
+        if (cleanQuery === '') {
           return false;
         }
         return orderDigitsOnly.includes(cleanQuery);
@@ -325,7 +374,7 @@ export default function AdminOrdersPage() {
     <div style={{
       minHeight: '100vh',
       background: '#f8fafc',
-      padding: '24px 16px',
+      padding: '24px 14px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -394,7 +443,7 @@ export default function AdminOrdersPage() {
             <input
               type="text"
               placeholder={
-                searchMode === 'orderId' ? "Enter Order ID digits (e.g. 2778)" :
+                searchMode === 'orderId' ? "Enter Order ID digits (e.g. 1)" :
                 searchMode === 'firmName' ? "Enter Firm / Company Name..." :
                 searchMode === 'designNumber' ? "Enter Design Number..." :
                 searchMode === 'city' ? "Enter City Name..." : "Enter Mobile Number..."
@@ -632,7 +681,27 @@ export default function AdminOrdersPage() {
                     )}
 
                     {!isTrashed && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* AMAZON-STYLE SAMPLE PHOTOS PREVIEW BUTTON */}
+                        <button
+                          onClick={() => handleOpenGalleryModal(order)}
+                          style={{
+                            background: '#3b82f6',
+                            color: '#ffffff',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          📷 View Samples
+                        </button>
+
                         <button
                           onClick={() => handlePrintInvoice(order)}
                           style={{
@@ -669,7 +738,7 @@ export default function AdminOrdersPage() {
                             gap: '6px'
                           }}
                         >
-                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating PDF...' : `📄 Download Invoice (${displayOrderId})`}
+                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating PDF...' : `📄 Invoice (${displayOrderId})`}
                         </button>
                       </div>
                     )}
@@ -683,7 +752,149 @@ export default function AdminOrdersPage() {
 
       </div>
 
-      {/* 📄 PRINTABLE INVOICE TEMPLATE WITH SEPARATE COLOR PHOTO COLUMN */}
+      {/* 🛍️ AMAZON-STYLE SAMPLE PREVIEW SWIPE GALLERY MODAL */}
+      {galleryModalOpen && currentGalleryImages.length > 0 && (
+        <div 
+          onClick={() => setGalleryModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.92)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              maxWidth: '520px',
+              width: '100%',
+              background: '#0f172a',
+              borderRadius: '24px',
+              padding: '20px',
+              color: '#ffffff',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
+                  Design #{galleryDesignNo} Samples
+                </h3>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  Image {activeImageIndex + 1} of {currentGalleryImages.length}
+                </span>
+              </div>
+              <button
+                onClick={() => setGalleryModalOpen(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Main Amazon Bada Preview Display */}
+            <div style={{ position: 'relative', width: '100%', height: '360px', background: '#000000', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img
+                src={currentGalleryImages[activeImageIndex]}
+                alt={`Sample ${activeImageIndex + 1}`}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+              />
+
+              {/* Prev Arrow */}
+              {currentGalleryImages.length > 1 && (
+                <button
+                  onClick={() => setActiveImageIndex((prev) => (prev === 0 ? currentGalleryImages.length - 1 : prev - 1))}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '50%',
+                    width: '40px',
+                    height: '40px',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ❮
+                </button>
+              )}
+
+              {/* Next Arrow */}
+              {currentGalleryImages.length > 1 && (
+                <button
+                  onClick={() => setActiveImageIndex((prev) => (prev === currentGalleryImages.length - 1 ? 0 : prev + 1))}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '50%',
+                    width: '40px',
+                    height: '40px',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ❯
+                </button>
+              )}
+            </div>
+
+            {/* Amazon-style Bottom Horizontal Thumbnails Slider */}
+            {currentGalleryImages.length > 1 && (
+              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', marginTop: '14px', paddingBottom: '6px' }}>
+                {currentGalleryImages.map((imgUrl, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setActiveImageIndex(idx)}
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      border: activeImageIndex === idx ? '2.5px solid #3b82f6' : '1px solid #334155',
+                      opacity: activeImageIndex === idx ? 1 : 0.6,
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    <img src={imgUrl} alt="thumb" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* 📄 PRINTABLE INVOICE TEMPLATE WITH DEDICATED PHOTO IN ITEM / DESIGN COLUMN */}
       {selectedOrder && (
         <div style={{ position: 'fixed', left: '-9999px', top: '0', width: '750px', zIndex: -100 }}>
           <div ref={invoiceRef} style={{ width: '750px', padding: '40px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b' }}>
@@ -722,7 +933,7 @@ export default function AdminOrdersPage() {
               {selectedOrder.agentName && <div style={{ fontSize: '13px', color: '#334155' }}>Agent: {selectedOrder.agentName}</div>}
             </div>
 
-            {/* Table with Dedicated Color Photo Column */}
+            {/* Table with Dedicated Item Design Photo */}
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', textAlign: 'left' }}>
@@ -741,10 +952,19 @@ export default function AdminOrdersPage() {
 
                   return (
                     <tr key={col} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      {/* Show Design number only on first row */}
+                      {/* Show Design number & Main Item photo on first row */}
                       {index === 0 ? (
                         <td style={{ padding: '12px 10px', fontWeight: 'bold', verticalAlign: 'middle' }} rowSpan={Object.keys(selectedOrder.items).filter(k => selectedOrder.items[k] > 0).length}>
-                          #{selectedOrder.designNumber}
+                          <div>#{selectedOrder.designNumber}</div>
+                          {photoUrl && (
+                            <div style={{ marginTop: '6px' }}>
+                              <img 
+                                src={photoUrl} 
+                                alt={selectedOrder.designNumber} 
+                                style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
+                              />
+                            </div>
+                          )}
                         </td>
                       ) : null}
 
