@@ -30,8 +30,7 @@ export default function CustomerSamplePage() {
   const [touchStartX, setTouchStartX] = useState<number>(0);
   const [touchEndX, setTouchEndX] = useState<number>(0);
 
-  // Admin WhatsApp Number
-  const ADMIN_WHATSAPP_NUMBER = '919163932222';
+  const PHONE_NUMBER_1 = '919163932222';
 
   useEffect(() => {
     async function fetchSample() {
@@ -165,7 +164,7 @@ export default function CustomerSamplePage() {
     });
   };
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (targetPhone: string) => {
     if (totalQuantity <= 0) {
       alert('Please enter quantity (pcs) for at least one color!');
       return;
@@ -236,8 +235,6 @@ export default function CustomerSamplePage() {
       text += `-------------------------------\n`;
 
       let sharedSuccessfully = false;
-
-      // 1. Pehle Web Share API try karenge taaki mobile par Photo + Text dono WhatsApp par direct attach ho kar jaye
       if (navigator.share && sample.imageUrl) {
         try {
           const response = await fetch(sample.imageUrl);
@@ -252,13 +249,12 @@ export default function CustomerSamplePage() {
             sharedSuccessfully = true;
           }
         } catch (err) {
-          console.log('Image share via Web API failed, fallback to direct WhatsApp URL', err);
+          console.log('Image share failed, fallback to direct WhatsApp URL', err);
         }
       }
 
-      // 2. Agar Web Share support nahi karta, toh seedha Admin ke number par WhatsApp chat open hogi text ke sath
       if (!sharedSuccessfully) {
-        const waLink = `https://api.whatsapp.com/send?phone=${ADMIN_WHATSAPP_NUMBER}&text=${encodeURIComponent(text)}`;
+        const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
         window.location.href = waLink;
       }
 
@@ -672,7 +668,7 @@ export default function CustomerSamplePage() {
           </div>
 
           <button
-            onClick={handlePlaceOrder}
+            onClick={() => handlePlaceOrder(PHONE_NUMBER_1)}
             style={{
               width: '100%',
               background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
