@@ -30,7 +30,8 @@ export default function CustomerSamplePage() {
   const [touchStartX, setTouchStartX] = useState<number>(0);
   const [touchEndX, setTouchEndX] = useState<number>(0);
 
-  const PHONE_NUMBER_1 = '919163932222';
+  // 👇 Yahan aapka admin/owner ka WhatsApp number set hai jiske paas order jayega
+  const ADMIN_WHATSAPP_NUMBER = '919163932222';
 
   useEffect(() => {
     async function fetchSample() {
@@ -164,7 +165,7 @@ export default function CustomerSamplePage() {
     });
   };
 
-  const handlePlaceOrder = async (targetPhone: string) => {
+  const handlePlaceOrder = async () => {
     if (totalQuantity <= 0) {
       alert('Please enter quantity (pcs) for at least one color!');
       return;
@@ -234,29 +235,9 @@ export default function CustomerSamplePage() {
       text += `*TOTAL AMOUNT:* ₹${totalAmount}\n`;
       text += `-------------------------------\n`;
 
-      let sharedSuccessfully = false;
-      if (navigator.share && sample.imageUrl) {
-        try {
-          const response = await fetch(sample.imageUrl);
-          const blob = await response.blob();
-          const imageFile = new File([blob], `Design_${sample.designNumber}.jpg`, { type: blob.type });
-
-          if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
-            await navigator.share({
-              text: text,
-              files: [imageFile],
-            });
-            sharedSuccessfully = true;
-          }
-        } catch (err) {
-          console.log('Image share failed, fallback to direct WhatsApp URL', err);
-        }
-      }
-
-      if (!sharedSuccessfully) {
-        const waLink = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(text)}`;
-        window.location.href = waLink;
-      }
+      // Seedha Admin ke number par WhatsApp chat open karne ka link redirect karenge
+      const waLink = `https://api.whatsapp.com/send?phone=${ADMIN_WHATSAPP_NUMBER}&text=${encodeURIComponent(text)}`;
+      window.location.href = waLink;
 
     } catch (e) {
       console.warn('Error saving order record:', e);
@@ -668,7 +649,7 @@ export default function CustomerSamplePage() {
           </div>
 
           <button
-            onClick={() => handlePlaceOrder(PHONE_NUMBER_1)}
+            onClick={handlePlaceOrder}
             style={{
               width: '100%',
               background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
