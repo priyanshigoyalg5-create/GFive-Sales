@@ -13,7 +13,7 @@ type Msg = { role: 'user' | 'assistant'; content: string; error?: boolean };
 const SUGGESTIONS = [
   'Aaj kitne orders aaye?',
   'Is mahine sabse zyada kaunsa design bika?',
-  'Kis sales person ne sabse zyada sale kiya aur kyun?',
+  'Kis Sales Person ne sabse zyada sale kiya aur kyun?',
   'Kaunse orders 3 din se zyada pending hain?',
   'Is mahine vs pichle mahine — sale kitni badhi?',
   'Kaunse designs ka ek bhi order nahi aaya?',
@@ -105,7 +105,7 @@ export default function AssistantPage() {
     },
     {
       icon: UserRound,
-      label: 'Top sales person · this month',
+      label: 'Top Sales Person · this month',
       value: topPerson?.name || '—',
       sub: topPerson ? `${inr(topPerson.amount)} · ${topPerson.orders} order${topPerson.orders === 1 ? "" : "s"}` : 'No sales yet',
     },
@@ -224,7 +224,7 @@ export default function AssistantPage() {
             </button>
           </div>
           <p className="mt-1.5 text-center text-[11px] text-muted">
-            Cancelled &amp; trashed orders are not counted. A sales person gets credit for designs uploaded in their name.
+            Cancelled &amp; trashed orders are not counted. A Sales Person gets credit for designs uploaded in their name.
           </p>
         </form>
       </section>

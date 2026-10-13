@@ -212,7 +212,7 @@ export function buildDigest(orders: Order[], samples: Sample[], now = new Date()
     generatedAt: now.toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'short' }),
     notes: [
       'Amounts are in INR. Cancelled and trashed orders are excluded from sales figures.',
-      'Each order is credited to exactly one sales person: the staff member whose shared link the customer ordered from. designsUploadedBySalesPerson counts samples each person added (creator), which is separate from sales credit.',
+      'Each order is credited to exactly one sales person: the Sales Person whose shared link the customer ordered from. designsUploadedBySalesPerson counts samples each person added (creator), which is separate from sales credit.',
       'customers = unique buyers by mobile number.',
     ],
     statusCounts: status,

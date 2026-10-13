@@ -37,7 +37,7 @@ export default function EditSamplePage() {
       <div className="card p-10 text-center">
         <p className="font-display text-2xl">You can&apos;t edit this design</p>
         <p className="mt-1 text-sm text-muted">
-          #{sample.designNumber} was added by {sample.createdByName || sample.salesPerson || 'another staff member'}. Only they or the Super Admin can edit it. You can still share it from Samples.
+          #{sample.designNumber} was added by {sample.createdByName || sample.salesPerson || 'another Sales Person'}. Only they or the Super Admin can edit it. You can still share it from Samples.
         </p>
         <Link href="/admin/samples" className="btn btn-outline mt-4">Back to samples</Link>
       </div>

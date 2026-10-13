@@ -61,7 +61,7 @@ export default function LoginPage() {
           </h1>
           <p className="mt-4 max-w-sm text-ivory/70">Upload samples, share design links on WhatsApp and manage every order in one place.</p>
         </div>
-        <p className="text-xs text-ivory/40">Staff access only</p>
+        <p className="text-xs text-ivory/40">For GFive Sales Persons &amp; Admins only</p>
       </div>
 
       <div className="flex items-center justify-center bg-cream px-5 py-12">

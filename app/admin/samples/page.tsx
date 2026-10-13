@@ -82,7 +82,7 @@ export default function AdminSamplesPage() {
       <div className="card mb-5 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search design no., fabric, work, sales person" />
+          <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search design no., fabric, work, Sales Person" />
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setTab('mine'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'mine' ? 'chip-active' : ''}`}>

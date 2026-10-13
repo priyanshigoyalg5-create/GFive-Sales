@@ -77,7 +77,7 @@ export function orderSeller(o: Order): { uid: string; name: string } {
   const uid = o.salesPersonUid || '';
   const raw = (o.salesPersonName || o.salesPerson || '').trim();
   const name = raw && raw !== 'N/A' ? raw : '';
-  return { uid, name: name || (uid ? 'Staff' : 'Unassigned') };
+  return { uid, name: name || (uid ? 'Sales Person' : 'Unassigned') };
 }
 
 /** Category of an order (first design's category). */

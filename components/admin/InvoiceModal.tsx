@@ -101,7 +101,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                 <p className="mt-1"><span className="text-muted">Designs </span>{lines.length}</p>
                 <p><span className="text-muted">Total pieces </span>{totalQty} pcs</p>
                 {lines.some((l) => l.salesPerson) && (
-                  <p><span className="text-muted">Sales person </span>{orderSeller(order).name}</p>
+                  <p><span className="text-muted">Sales Person </span>{orderSeller(order).name}</p>
                 )}
               </div>
             </div>

@@ -12,7 +12,7 @@ const NAV = [
   { href: '/admin/samples', label: 'Samples', icon: Shirt, superOnly: false },
   { href: '/admin/samples/new', label: 'Add Sample', icon: PlusCircle, superOnly: false },
   { href: '/admin/assistant', label: 'Ask AI', icon: Sparkles, superOnly: false },
-  { href: '/admin/staff-sales', label: 'Staff Sales', icon: BarChart3, superOnly: true },
+  { href: '/admin/staff-sales', label: 'Sales Person Sales', icon: BarChart3, superOnly: true },
   { href: '/admin/team', label: 'Team', icon: Users, superOnly: true },
   { href: '/admin/settings', label: 'Settings', icon: Settings, superOnly: true },
 ];
@@ -104,7 +104,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="flex items-center gap-1">
           {isSuper && (
             <>
-              <Link href="/admin/staff-sales" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Staff sales"><BarChart3 size={18} /></Link>
+              <Link href="/admin/staff-sales" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Sales Person sales"><BarChart3 size={18} /></Link>
               <Link href="/admin/team" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Team"><Users size={18} /></Link>
               <Link href="/admin/settings" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Settings"><Settings size={18} /></Link>
             </>

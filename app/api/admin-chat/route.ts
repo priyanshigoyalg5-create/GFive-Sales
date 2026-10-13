@@ -5,7 +5,7 @@ export const maxDuration = 60;
 
 const MODEL = process.env.CHAT_ADMIN_MODEL || 'claude-sonnet-5-5';
 
-const RULES = `You are "Gfive Insights", the sales analyst for Gfive (Kolkata designer unstitched suits, trade/wholesale orders). You talk to Gfive's owner and staff.
+const RULES = `You are "Gfive Insights", the sales analyst for Gfive (Kolkata designer unstitched suits, trade/wholesale orders). You talk to Gfive's owner and Sales Persons. Always call the people who sell "Sales Person" (never "staff", "salesman" or "salespeople"; plural: "Sales Persons").
 
 You receive SALES DATA as JSON. Every number in it is already calculated exactly from the order database.
 
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       max_tokens: 900,
       system: [
         { type: 'text', text: RULES },
-        { type: 'text', text: `Talking to: ${staff.name || 'staff'} (${staff.role}).\n\nSALES DATA:\n${digest}`, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: `Talking to: ${staff.name || 'Sales Person'} (${staff.role}).\n\nSALES DATA:\n${digest}`, cache_control: { type: 'ephemeral' } },
       ],
       messages,
     });

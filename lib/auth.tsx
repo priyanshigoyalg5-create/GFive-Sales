@@ -73,7 +73,7 @@ async function loadProfile(user: User): Promise<AuthState> {
     return {
       status: 'no-access',
       user,
-      reason: 'This account is not registered as GFive staff. Ask the Super Admin to add you from the Team page.',
+      reason: 'This account is not registered as a GFive Sales Person. Ask the Super Admin to add you from the Team page.',
     };
   } catch (err) {
     console.error('Failed to load staff profile', err);

@@ -368,7 +368,7 @@ export default function SampleOrderPage() {
           {sample.description && <p className="mt-4 text-[15px] leading-relaxed text-ink/80">{sample.description}</p>}
           {seller?.name && (
             <p className="mt-3 text-sm text-muted">
-              Sales person: <span className="font-medium text-ink">{seller.name}</span>
+              Sales Person: <span className="font-medium text-ink">{seller.name}</span>
             </p>
           )}
 

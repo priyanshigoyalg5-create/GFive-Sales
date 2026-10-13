@@ -96,16 +96,16 @@ export default function StaffSalesPage() {
 
   const exportCsv = () => {
     const out: string[][] = [
-      [`GFive — Staff-wise sales — ${label}${cat ? ` — ${categoryName(cat)}` : ''}`],
+      [`GFive — Sales Person-wise sales — ${label}${cat ? ` — ${categoryName(cat)}` : ''}`],
       [],
-      ['Salesperson', 'Orders (excl. cancelled)', 'Pieces', 'Sales value', 'Pending value', 'Dispatched value', 'Completed value', 'Cancelled orders'],
+      ['Sales Person', 'Orders (excl. cancelled)', 'Pieces', 'Sales value', 'Pending value', 'Dispatched value', 'Completed value', 'Cancelled orders'],
       ...rows.map((r) => [
         r.name, String(r.count), String(r.pcs), String(r.value),
         String(r.byStatus.Pending.value), String(r.byStatus.Dispatched.value), String(r.byStatus.Completed.value), String(r.byStatus.Cancelled.n),
       ]),
       ['TOTAL', String(total.count), String(total.pcs), String(total.value), '', '', String(total.completed), ''],
       [],
-      ['Order No', 'Date', 'Salesperson', 'Status', 'Category', 'Firm', 'City', 'Pieces', 'Amount', 'Sample added by'],
+      ['Order No', 'Date', 'Sales Person', 'Status', 'Category', 'Firm', 'City', 'Pieces', 'Amount', 'Sample added by'],
       ...rows.flatMap((r) =>
         r.orders.map((o) => [
           displayOrderId(o), formatDate(tsToDate(o.createdAt)), r.name, orderStatus(o), categoryName(orderCategory(o)),
@@ -117,7 +117,7 @@ export default function StaffSalesPage() {
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gfive-staff-sales-${period === 'all' ? 'all-time' : period === 'month' ? month : label.replace(/\s+/g, '-')}.csv`;
+    a.download = `gfive-sales-person-sales-${period === 'all' ? 'all-time' : period === 'month' ? month : label.replace(/\s+/g, '-')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -126,8 +126,8 @@ export default function StaffSalesPage() {
     <>
       <PageHeader
         eyebrow="Super Admin"
-        title="Staff-wise orders & sales"
-        subtitle="Every order is credited to exactly one salesperson — the person whose link the customer ordered from."
+        title="Sales Person-wise orders & sales"
+        subtitle="Every order is credited to exactly one Sales Person — the person whose link the customer ordered from."
         actions={
           <button className="btn btn-outline" onClick={exportCsv} disabled={loading}>
             <Download size={16} /> Export for salary
@@ -181,7 +181,7 @@ export default function StaffSalesPage() {
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-line bg-sand/50 text-left text-[11px] uppercase tracking-[0.1em] text-muted">
-                <th className="p-3 font-medium">Salesperson</th>
+                <th className="p-3 font-medium">Sales Person</th>
                 <th className="p-3 text-right font-medium">Orders</th>
                 <th className="p-3 text-right font-medium">Pieces</th>
                 <th className="p-3 text-right font-medium">Sales value</th>
@@ -277,7 +277,7 @@ export default function StaffSalesPage() {
         </div>
       )}
       <p className="mt-3 text-xs text-muted">
-        Sales value excludes cancelled and trashed orders. Old orders placed before staff links existed appear under “Unassigned” — credit them to the right person from the Orders page.
+        Sales value excludes cancelled and trashed orders. Old orders placed before Sales Person links existed appear under “Unassigned” — credit them to the right person from the Orders page.
       </p>
     </>
   );

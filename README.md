@@ -4,7 +4,7 @@ Sample-link ordering for **GFive — Glamour Grace Unlimited** (Kolkata). The we
 
 - **Customer link** — `/s/<id>`: one design (photo gallery with zoom, colour photos, pieces per colour, firm details) and "Place order on WhatsApp". No catalogue, no cart.
 - **Admin** — `/admin` (login required; `/` redirects here): Orders dashboard, Samples, Add / Edit sample, PDF sales-order invoices, Ask AI.
-- **Super Admin** — everything above + Staff Sales (staff-wise orders & sales for salary, CSV export), Team (create logins, set each person's WhatsApp number, disable staff), Settings, permanent delete, and correcting the salesperson on old orders.
+- **Super Admin** — everything above + Sales Person Sales (Sales Person-wise orders & sales for salary, CSV export), Team (create logins, set each person's WhatsApp number, disable staff), Settings, permanent delete, and correcting the salesperson on old orders.
 
 ## Staff ownership & attribution
 - Every sample has a mandatory **design category** (Tyohaar / Rozana / Maharani / Shudh) and an owner (`createdByUid`) set automatically from the logged-in staff member. The catalogue is shared; only the owner or Super Admin can edit/trash a sample.

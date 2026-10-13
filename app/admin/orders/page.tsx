@@ -155,7 +155,7 @@ export default function OrdersPage() {
       <PageHeader
         eyebrow="Live"
         title="Orders"
-        subtitle={isSuper ? 'All staff orders. Use the filters to see one salesperson.' : 'Only orders from the links you shared are shown here.'}
+        subtitle={isSuper ? 'Orders of every Sales Person. Use the filters to see one Sales Person.' : 'Only orders from the links you shared are shown here.'}
         actions={
           <button className="btn btn-outline" onClick={exportCsv} disabled={!shown.length}>
             <Download size={16} /> Export CSV
@@ -184,8 +184,8 @@ export default function OrdersPage() {
           </div>
           {isSuper && (
             <div className="relative">
-              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-48" aria-label="Salesperson">
-                <option value="">All salespeople</option>
+              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-48" aria-label="Sales Person">
+                <option value="">All Sales Persons</option>
                 {staffList.map((s) => (
                   <option key={s.uid} value={s.uid}>{s.name}</option>
                 ))}
@@ -394,7 +394,7 @@ function OrderCard({
             {staffList ? (
               <SellerPicker order={o} staffList={staffList} />
             ) : (
-              <p>Salesperson: <span className="text-ink">{orderSeller(o).name}</span></p>
+              <p>Sales Person: <span className="text-ink">{orderSeller(o).name}</span></p>
             )}
             {o.sampleCreatorName && <p>Sample added by: <span className="text-ink">{o.sampleCreatorName}</span></p>}
           </div>
@@ -466,9 +466,9 @@ function SellerPicker({ order: o, staffList }: { order: Order; staffList: Public
   const s = orderSeller(o);
   return (
     <label className="flex items-center gap-1.5">
-      <span>Salesperson:</span>
+      <span>Sales Person:</span>
       <select
-        aria-label="Salesperson credited for this order"
+        aria-label="Sales Person credited for this order"
         value={s.uid}
         onChange={async (e) => {
           const p = staffList.find((x) => x.uid === e.target.value);
