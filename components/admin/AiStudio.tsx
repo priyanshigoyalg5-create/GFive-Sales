@@ -38,6 +38,9 @@ export default function AiStudio({
   const [added, setAdded] = useState<string[]>(aiPhotos);
   const [busy, setBusy] = useState<'photo' | 'video' | 'save' | null>(null);
   const [secs, setSecs] = useState(0);
+  const [long, setLong] = useState(true); // 15 s (8 s + Google extension) or 8 s
+  const [stage, setStage] = useState<'first' | 'extending'>('first');
+  const [note, setNote] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(savedVideo || null);
   const [videoSaved, setVideoSaved] = useState(!!savedVideo);
   const [err, setErr] = useState<string | null>(null);
@@ -68,8 +71,18 @@ export default function AiStudio({
     setSecs(0);
     stop.current = new AbortController();
     try {
-      const url = await aiModelVideo(user, photo, setSecs, stop.current.signal);
+      setStage('first');
+      setNote(null);
+      const { url, extended } = await aiModelVideo(user, photo, {
+        long,
+        signal: stop.current.signal,
+        onTick: (t, st) => {
+          setSecs(t);
+          setStage(st);
+        },
+      });
       setVideo(url);
+      if (long && !extended) setNote('Google could not make it longer this time, so this is the 8-second video.');
       setVideoSaved(false);
     } catch (e) {
       if ((e as Error).message !== 'Stopped') setErr((e as Error).message);
@@ -201,7 +214,17 @@ export default function AiStudio({
 
           {/* video */}
           <div className="card space-y-3 p-4">
-            <p className="flex items-center gap-2 font-display text-xl font-semibold"><Clapperboard size={18} className="text-gold-600" /> Model video (8 sec)</p>
+            <p className="flex items-center gap-2 font-display text-xl font-semibold"><Clapperboard size={18} className="text-gold-600" /> Model video</p>
+            <div className="flex gap-2" role="group" aria-label="Video length">
+              {[
+                { v: true, label: '15 sec', cost: '~₹140' },
+                { v: false, label: '8 sec', cost: '~₹70' },
+              ].map((o) => (
+                <button key={o.label} type="button" disabled={!!busy} onClick={() => setLong(o.v)} aria-pressed={long === o.v} className={`chip ${long === o.v ? 'chip-active' : ''}`}>
+                  {o.label} <span className="opacity-70">{o.cost}</span>
+                </button>
+              ))}
+            </div>
             {video ? (
               <figure>
                 <video src={video} controls playsInline className="mx-auto max-h-[60vh] rounded-2xl bg-black" />
@@ -212,7 +235,7 @@ export default function AiStudio({
             )}
             {busy === 'video' ? (
               <div className="flex items-center justify-between gap-3 rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-800">
-                <span className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Making video… {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')} (1–3 min)</span>
+                <span className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> {stage === 'first' ? 'Making video…' : 'Making it longer (part 2)…'} {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')} ({long ? '3–6 min' : '1–3 min'})</span>
                 <button type="button" className="text-xs underline" onClick={() => stop.current?.abort()}>Stop</button>
               </div>
             ) : (
@@ -220,7 +243,8 @@ export default function AiStudio({
                 <Clapperboard size={16} /> {video ? 'Make a new video' : 'Create video'}
               </button>
             )}
-            <p className="text-center text-xs text-muted">About ₹70 per video (Google Veo). Keep this window open while it is made.</p>
+            <p className="text-center text-xs text-muted">{long ? 'About ₹140 for 15 sec' : 'About ₹70 for 8 sec'} (Google Veo). Keep this window open while it is made.</p>
+            {note && <p className="rounded-lg bg-gold-50 px-3 py-2 text-center text-xs text-gold-600">{note}</p>}
             {video && busy !== 'video' && (
               <div className="flex flex-wrap gap-2">
                 {canSave && onSaveVideo && (videoSaved ? (

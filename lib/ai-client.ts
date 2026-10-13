@@ -27,18 +27,35 @@ export async function aiModelPhoto(user: User, imageUrl: string, background: AiB
   return r.url;
 }
 
-/** Starts the video and waits for it (checks every 10 s, gives up after ~7 min). */
-export async function aiModelVideo(user: User, imageUrl: string, onTick?: (secs: number) => void, signal?: AbortSignal): Promise<string> {
-  const { op } = await call<{ op: string }>(user, '/api/ai/model-video', { method: 'POST', body: JSON.stringify({ imageUrl }) });
+/**
+ * Starts the video and waits for it (checks every 10 s, gives up after ~12 min).
+ * `long` = 15 s: the 8 s clip is extended once by Google before it is saved.
+ */
+export async function aiModelVideo(
+  user: User,
+  imageUrl: string,
+  opts: { long?: boolean; onTick?: (secs: number, stage: 'first' | 'extending') => void; signal?: AbortSignal } = {},
+): Promise<{ url: string; extended: boolean }> {
+  let { op } = await call<{ op: string }>(user, '/api/ai/model-video', { method: 'POST', body: JSON.stringify({ imageUrl }) });
+  let extend = !!opts.long;
+  let stage: 'first' | 'extending' = 'first';
   const started = Date.now();
-  while (Date.now() - started < 7 * 60_000) {
+  while (Date.now() - started < 12 * 60_000) {
     for (let i = 0; i < 10; i++) {
-      if (signal?.aborted) throw new Error('Stopped');
+      if (opts.signal?.aborted) throw new Error('Stopped');
       await new Promise((r) => setTimeout(r, 1000));
-      onTick?.(Math.round((Date.now() - started) / 1000));
+      opts.onTick?.(Math.round((Date.now() - started) / 1000), stage);
     }
-    const r = await call<{ done: boolean; url?: string }>(user, `/api/ai/model-video?op=${encodeURIComponent(op)}`);
-    if (r.done && r.url) return r.url;
+    const r = await call<{ done: boolean; url?: string; op?: string; extended?: boolean }>(
+      user,
+      `/api/ai/model-video?op=${encodeURIComponent(op)}${extend ? '&extend=1' : ''}`,
+    );
+    if (r.done && r.url) return { url: r.url, extended: !!r.extended && !!opts.long };
+    if (r.op) {
+      op = r.op; // the extension job
+      extend = false;
+      stage = 'extending';
+    }
   }
   throw new Error('The video is taking too long. Please try again.');
 }

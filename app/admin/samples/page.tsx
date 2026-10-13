@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Clapperboard } from 'lucide-react';
+import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Play, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { useOrders, useSamples } from '@/lib/hooks';
@@ -14,6 +14,7 @@ import PageHeader from '@/components/admin/PageHeader';
 import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
 import type { Sample } from '@/lib/types';
 import AiStudio from '@/components/admin/AiStudio';
+import Lightbox from '@/components/Lightbox';
 
 export default function AdminSamplesPage() {
   const { isSuper, profile } = useAuth();
@@ -28,6 +29,8 @@ export default function AdminSamplesPage() {
   const [sel, setSel] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [aiFor, setAiFor] = useState<Sample | null>(null);
+  const [gallery, setGallery] = useState<{ s: Sample; index: number } | null>(null);
+  const [playing, setPlaying] = useState<Sample | null>(null);
 
   const pcsByDesign = useMemo(() => {
     const m = new Map<string, number>();
@@ -158,8 +161,11 @@ export default function AdminSamplesPage() {
               <article key={s.id} className={`card flex flex-col overflow-hidden transition ${on ? 'ring-2 ring-leaf-600' : ''} ${s.isTrashed ? 'bg-red-50/40' : ''}`}>
                 <div className="relative aspect-[4/5] bg-sand">
                   {photos[0] && (
+                    <button type="button" className="absolute inset-0 cursor-zoom-in" onClick={() => setGallery({ s, index: 0 })} aria-label={`View photos of design ${s.designNumber}`} />
+                  )}
+                  {photos[0] && (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={cldThumb(photos[0], 500, 625)} alt={`Design ${s.designNumber}`} width={500} height={625} loading={idx < 4 ? 'eager' : 'lazy'} fetchPriority={idx === 0 ? 'high' : undefined} className="size-full object-cover" />
+                    <img src={cldThumb(photos[0], 500, 625)} alt={`Design ${s.designNumber}`} width={500} height={625} loading={idx < 4 ? 'eager' : 'lazy'} fetchPriority={idx === 0 ? 'high' : undefined} className="pointer-events-none size-full object-cover" />
                   )}
                   {canEdit(s) && (
                     <label className="absolute left-2 top-2 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow">
@@ -167,10 +173,18 @@ export default function AdminSamplesPage() {
                     </label>
                   )}
                   <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
-                  <div className="absolute inset-x-2 bottom-2 flex justify-between text-[13px]">
+                  <div className="pointer-events-none absolute inset-x-2 bottom-2 flex justify-between text-[13px]">
                     <span className="flex gap-1">
-                      {photos.length > 1 && <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>}
-                      {s.videoUrl && <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-white"><Clapperboard size={11} /> Video</span>}
+                      {photos.length > 1 && (
+                        <button type="button" onClick={() => setGallery({ s, index: 0 })} className="pointer-events-auto relative inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-white" aria-label={`View ${photos.length} photos`}>
+                          <Images size={11} /> {photos.length}
+                        </button>
+                      )}
+                      {s.videoUrl && (
+                        <button type="button" onClick={() => setPlaying(s)} className="pointer-events-auto relative inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-white" aria-label={`Play video of design ${s.designNumber}`}>
+                          <Play size={11} fill="currentColor" /> Video
+                        </button>
+                      )}
                     </span>
                     {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {isSuper ? 'ordered' : 'by you'}</span>}
                   </div>
@@ -253,6 +267,27 @@ export default function AdminSamplesPage() {
               </article>
             );
           })}
+        </div>
+      )}
+      {gallery && (() => {
+        const imgs = samplePhotos(gallery.s);
+        return (
+          <Lightbox
+            images={imgs}
+            index={gallery.index}
+            onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))}
+            onClose={() => setGallery(null)}
+            caption={(i) => `#${gallery.s.designNumber} · ${gallery.s.aiImages?.includes(imgs[i]) ? 'AI generated' : 'Original'}`}
+          />
+        );
+      })()}
+      {playing?.videoUrl && (
+        <div className="fixed inset-0 z-[95] flex flex-col items-center justify-center bg-[#0d1709]/95 p-4" role="dialog" aria-modal="true" aria-label={`Video of design ${playing.designNumber}`} onClick={() => setPlaying(null)}>
+          <button type="button" onClick={() => setPlaying(null)} className="absolute right-4 top-4 grid size-10 place-items-center rounded-full bg-white/10 text-white" aria-label="Close video">
+            <X size={20} />
+          </button>
+          <video src={playing.videoUrl} controls autoPlay playsInline className="max-h-[80vh] max-w-full rounded-2xl bg-black" onClick={(e) => e.stopPropagation()} />
+          <p className="mt-3 text-sm text-white/90">#{playing.designNumber} · <span className="font-medium text-gold-400">AI generated video</span></p>
         </div>
       )}
       {aiFor && (() => {

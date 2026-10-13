@@ -16,6 +16,7 @@ import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@
 import type { Sample } from '@/lib/types';
 import { CATEGORIES, normCategory } from '@/lib/categories';
 import AiStudio from './AiStudio';
+import Lightbox from '@/components/Lightbox';
 
 interface Photo {
   id: string;
@@ -43,6 +44,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
   );
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl || '');
   const [ai, setAi] = useState<{ source: string } | null>(null);
+  const [view, setView] = useState<number | null>(null);
   const [aiPrep, setAiPrep] = useState(false);
   const [designNumber, setDesignNumber] = useState(initial?.designNumber || '');
   const [price, setPrice] = useState(initial ? String(initial.price ?? '') : '');
@@ -253,7 +255,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             <figure key={p.id}>
             <div className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-sand ring-1 ring-line">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.preview} alt="" className="size-full object-cover" />
+              <img src={p.preview} alt={p.ai ? 'AI generated photo' : 'Original photo'} className="size-full cursor-zoom-in object-cover" onClick={() => setView(i)} />
               {i === 0 && (
                 <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-gold-500 px-2 py-0.5 text-[12px] font-semibold text-white">
                   <Star size={10} fill="currentColor" /> Cover
@@ -312,6 +314,15 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
           )}
         </div>
       </section>
+      {view !== null && photos[view] && (
+        <Lightbox
+          images={photos.map((p) => p.url || p.preview)}
+          index={view}
+          onIndexChange={setView}
+          onClose={() => setView(null)}
+          caption={(i) => (photos[i]?.ai ? 'AI generated' : 'Original')}
+        />
+      )}
       {ai && (
         <AiStudio
           sourceUrl={ai.source}

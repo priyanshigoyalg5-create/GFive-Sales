@@ -26,13 +26,14 @@ export async function POST(req: Request) {
   }
 }
 
-/** Poll: ?op=… → { done:false } | { done:true, url } */
+/** Poll: ?op=…[&extend=1] → { done:false, op? } | { done:true, url, extended } */
 export async function GET(req: Request) {
   if (!(await staffOf(req))) return Response.json({ error: 'Please sign in again.' }, { status: 401 });
-  const op = new URL(req.url).searchParams.get('op');
+  const params = new URL(req.url).searchParams;
+  const op = params.get('op');
   if (!isVideoOperation(op)) return Response.json({ error: 'Bad request' }, { status: 400 });
   try {
-    return Response.json(await checkModelVideo(op));
+    return Response.json(await checkModelVideo(op, params.get('extend') === '1'));
   } catch (err) {
     return fail(err);
   }

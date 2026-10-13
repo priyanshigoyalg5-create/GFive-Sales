@@ -168,7 +168,49 @@ export function isVideoOperation(op: unknown): op is string {
 }
 
 /** Checks a Veo job; when finished, saves the clip to Cloudinary and returns its URL. */
-export async function checkModelVideo(op: string): Promise<{ done: false } | { done: true; url: string }> {
+const EXTEND_PROMPT = [
+  'Continue this exact video seamlessly with the same model, outfit, place and light.',
+  'She turns slowly to show the side and back of the kurta, then turns back to face the camera with a soft smile while the dupatta flows gently; the camera slowly pulls back to a full-length view.',
+  'Smooth, natural, realistic motion. Keep the outfit EXACTLY the same — same colour, embroidery and mirror work. No text, no logo, no other people.',
+].join(' ');
+
+/** Adds ~7 s to a finished Veo clip (result = whole clip, ~15 s). */
+async function startExtension(videoUri: string): Promise<string> {
+  const res = await fetch(`${API}/models/${VIDEO_MODEL}:predictLongRunning`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': apiKey(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      instances: [{ prompt: EXTEND_PROMPT, video: { uri: videoUri } }],
+      parameters: { durationSeconds: 8, resolution: '720p', personGeneration: 'allow_all', numberOfVideos: 1 },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.name) {
+    console.error('Veo extend error', res.status, data);
+    throw new AiError(data?.error?.message || 'could not extend');
+  }
+  return data.name as string;
+}
+
+async function saveVideo(uri: string): Promise<string> {
+  const host = new URL(uri).hostname;
+  if (!host.endsWith('googleapis.com')) throw new AiError('Unexpected video location.');
+  const vid = await fetch(uri, { headers: { 'x-goog-api-key': apiKey() }, redirect: 'follow' });
+  if (!vid.ok) throw new AiError('Could not download the video from Google.');
+  const blob = new Blob([await vid.arrayBuffer()], { type: 'video/mp4' });
+  return uploadToCloudinary(blob, 'video');
+}
+
+export type VideoCheck =
+  | { done: false; op?: string } // op = new job to poll (the extension)
+  | { done: true; url: string; extended: boolean };
+
+/**
+ * Checks a Veo job. With `extend`, a finished 8 s clip is extended once more
+ * (~15 s total) and the new job is returned to poll; otherwise the clip is
+ * saved to Cloudinary and its URL returned.
+ */
+export async function checkModelVideo(op: string, extend = false): Promise<VideoCheck> {
   const key = apiKey();
   const res = await fetch(`${API}/${op}`, { headers: { 'x-goog-api-key': key }, cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
@@ -181,10 +223,13 @@ export async function checkModelVideo(op: string): Promise<{ done: false } | { d
     const why = vr?.raiMediaFilteredReasons?.[0];
     throw new AiError(why ? `Google AI blocked this video: ${why}` : 'AI did not return a video. Please try again.', 422);
   }
-  const host = new URL(uri).hostname;
-  if (!host.endsWith('googleapis.com')) throw new AiError('Unexpected video location.');
-  const vid = await fetch(uri, { headers: { 'x-goog-api-key': key }, redirect: 'follow' });
-  if (!vid.ok) throw new AiError('Could not download the video from Google.');
-  const blob = new Blob([await vid.arrayBuffer()], { type: 'video/mp4' });
-  return { done: true, url: await uploadToCloudinary(blob, 'video') };
+  if (extend) {
+    try {
+      return { done: false, op: await startExtension(uri) };
+    } catch {
+      // keep the 8 s clip rather than losing it
+      return { done: true, url: await saveVideo(uri), extended: false };
+    }
+  }
+  return { done: true, url: await saveVideo(uri), extended: true };
 }
