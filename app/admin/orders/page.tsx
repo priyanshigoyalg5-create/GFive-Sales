@@ -19,6 +19,7 @@ import type { Order, OrderStatus } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
 import InvoiceModal from '@/components/admin/InvoiceModal';
 import Lightbox from '@/components/Lightbox';
+import SendToCustomer from '@/components/admin/SendToCustomer';
 
 type Tab = 'All' | OrderStatus | 'Trash';
 type Range = 'all' | 'today' | '7d' | 'month';
@@ -56,6 +57,7 @@ export default function OrdersPage() {
   const [range, setRange] = useState<Range>('all');
   const [sel, setSel] = useState<string[]>([]);
   const [invoice, setInvoice] = useState<Order | null>(null);
+  const [sendTo, setSendTo] = useState<Order | null>(null);
   const [gallery, setGallery] = useState<{ images: string[]; index: number } | null>(null);
 
   // ---------- stats (exclude trash & cancelled)
@@ -296,12 +298,14 @@ export default function OrdersPage() {
               staffList={isSuper ? staffList : null}
               onSelect={() => setSel((p) => (p.includes(o.id) ? p.filter((x) => x !== o.id) : [...p, o.id]))}
               onInvoice={() => setInvoice(o)}
+              onSend={() => setSendTo(o)}
               onPhotos={() => openGallery(o)}
             />
           ))
         )}
       </div>
 
+      {sendTo && <SendToCustomer order={sendTo} onClose={() => setSendTo(null)} />}
       {invoice && <InvoiceModal order={invoice} settings={settings} onClose={() => setInvoice(null)} />}
       {gallery && (
         <Lightbox images={gallery.images} index={gallery.index} onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))} onClose={() => setGallery(null)} />
@@ -311,7 +315,7 @@ export default function OrdersPage() {
 }
 
 function OrderCard({
-  order: o, selected, canDelete, staffList, onSelect, onInvoice, onPhotos,
+  order: o, selected, canDelete, staffList, onSelect, onInvoice, onSend, onPhotos,
 }: {
   order: Order;
   selected: boolean;
@@ -319,6 +323,7 @@ function OrderCard({
   staffList: PublicStaff[] | null; // Super Admin only: can correct the salesperson
   onSelect: () => void;
   onInvoice: () => void;
+  onSend: () => void;
   onPhotos: () => void;
 }) {
   const st = orderStatus(o);
@@ -326,8 +331,6 @@ function OrderCard({
   const lines = getOrderLines(o);
   const date = tsToDate(o.createdAt);
   const done = st === 'Completed' || st === 'Cancelled';
-  const phone = digitsOnly(o.mobile);
-  const waPhone = phone.length === 10 ? `91${phone}` : phone;
 
   return (
     <article className={`card overflow-hidden transition ${selected ? 'ring-2 ring-leaf-600' : ''} ${done && !o.isTrashed ? 'opacity-75' : ''} ${o.isTrashed ? 'bg-red-50/40' : ''}`}>
@@ -383,9 +386,9 @@ function OrderCard({
             <a href={`tel:${o.mobile}`} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs text-leaf-800 hover:bg-leaf-50">
               <Phone size={13} /> {o.mobile}
             </a>
-            <a href={`https://wa.me/${waPhone}`} target="_blank" className="grid size-8 place-items-center rounded-full bg-[#25d366] text-white" aria-label="WhatsApp customer">
+            <button onClick={onSend} className="grid size-8 place-items-center rounded-full bg-[#25d366] text-white" aria-label="Send order to customer on WhatsApp" title="Send order to customer">
               <MessageCircle size={14} />
-            </a>
+            </button>
           </div>
           <div className="mt-2 space-y-0.5 text-xs text-muted">
             {o.gstNo && <p>GSTIN: <span className="text-ink">{o.gstNo}</span></p>}
@@ -451,6 +454,11 @@ function OrderCard({
           <button className="btn btn-sm btn-outline" onClick={onPhotos}>
             <Images size={15} /> Photos
           </button>
+          {!o.isTrashed && (
+            <button className="btn btn-sm btn-whatsapp" onClick={onSend}>
+              <MessageCircle size={15} /> Send to customer
+            </button>
+          )}
           <button className="btn btn-sm btn-primary" onClick={onInvoice}>
             <FileText size={15} /> Invoice
           </button>
