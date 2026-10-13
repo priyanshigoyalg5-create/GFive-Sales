@@ -38,7 +38,7 @@ export default function QtyStepper({
           const n = parseInt(e.target.value, 10);
           onChange(Number.isNaN(n) ? 0 : Math.max(0, Math.min(9999, n)));
         }}
-        className={`w-12 bg-transparent text-center text-[15px] font-semibold text-ink outline-none placeholder:text-muted/50 ${size === 'sm' ? 'w-10 text-sm' : ''}`}
+        className={`w-12 bg-transparent text-center text-[17px] font-semibold text-ink outline-none placeholder:text-muted/50 ${size === 'sm' ? 'w-10 text-sm' : ''}`}
       />
       <button
         type="button"

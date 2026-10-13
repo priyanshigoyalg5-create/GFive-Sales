@@ -74,7 +74,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition ${
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[17px] transition ${
                 isActive(path, href) ? 'bg-ivory/12 text-white shadow-inner ring-1 ring-gold-400/30' : 'text-ivory/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -99,7 +99,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <Link href="/admin/orders" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="h-8 w-auto" />
-          <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[11px] text-leaf-800">{isSuper ? 'Super Admin' : 'Admin'}</span>
+          <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[13px] text-leaf-800">{isSuper ? 'Super Admin' : 'Admin'}</span>
         </Link>
         <div className="flex items-center gap-1">
           {isSuper && (
@@ -129,7 +129,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {NAV.slice(0, 4).map(({ href, label, icon: Icon }) => {
           const on = isActive(path, href);
           return (
-            <Link key={href} href={href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${on ? 'text-leaf-800' : 'text-muted'}`}>
+            <Link key={href} href={href} className={`flex flex-col items-center gap-0.5 py-2 text-[13px] ${on ? 'text-leaf-800' : 'text-muted'}`}>
               <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-leaf-100' : ''}`}>
                 <Icon size={19} />
               </span>

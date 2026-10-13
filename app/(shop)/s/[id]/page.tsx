@@ -301,7 +301,7 @@ export default function SampleOrderPage() {
             </button>
             {photos.length > 1 && (
               <>
-                <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur">
+                <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] text-white backdrop-blur">
                   {active + 1} / {photos.length}
                 </span>
                 <button onClick={() => move(-1)} className="absolute left-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-ink shadow" aria-label="Previous photo">
@@ -360,12 +360,12 @@ export default function SampleOrderPage() {
               ['Rate', `${inr(price)} / pc`],
             ].map(([k, v]) => (
               <div key={k} className="bg-ivory px-4 py-3">
-                <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">{k}</dt>
+                <dt className="text-[13px] uppercase tracking-[0.14em] text-muted">{k}</dt>
                 <dd className="mt-0.5 font-medium text-ink">{v || '—'}</dd>
               </div>
             ))}
           </dl>
-          {sample.description && <p className="mt-4 text-[15px] leading-relaxed text-ink/80">{sample.description}</p>}
+          {sample.description && <p className="mt-4 text-[17px] leading-relaxed text-ink/80">{sample.description}</p>}
           {seller?.name && (
             <p className="mt-3 text-sm text-muted">
               Sales Person: <span className="font-medium text-ink">{seller.name}</span>
@@ -446,7 +446,7 @@ export default function SampleOrderPage() {
               </Field>
             </div>
             {failMsg && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{failMsg}</p>}
-            <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp mt-5 hidden h-13 w-full text-[15px] md:flex">
+            <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp mt-5 hidden h-13 w-full text-[17px] md:flex">
               {busy ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
               {busy ? 'Placing order…' : `Place order on WhatsApp · ${totalPcs} pcs`}
             </button>
@@ -460,7 +460,7 @@ export default function SampleOrderPage() {
           <span className="text-muted">{totalPcs} pcs selected</span>
           <span className="font-semibold text-ink">{inr(totalAmt)}</span>
         </div>
-        <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp h-12 w-full text-[15px]">
+        <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp h-12 w-full text-[17px]">
           {busy ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
           {busy ? 'Placing order…' : 'Place order on WhatsApp'}
         </button>

@@ -168,7 +168,7 @@ export default function StaffSalesPage() {
           ['Completed value', inr(total.completed)],
         ].map(([k, v]) => (
           <div key={k} className="card p-4">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-muted">{k}</p>
+            <p className="text-[13px] uppercase tracking-[0.12em] text-muted">{k}</p>
             <p className="mt-1.5 truncate font-display text-2xl font-semibold text-leaf-800">{v}</p>
           </div>
         ))}
@@ -180,7 +180,7 @@ export default function StaffSalesPage() {
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr className="border-b border-line bg-sand/50 text-left text-[11px] uppercase tracking-[0.1em] text-muted">
+              <tr className="border-b border-line bg-sand/50 text-left text-[13px] uppercase tracking-[0.1em] text-muted">
                 <th className="p-3 font-medium">Sales Person</th>
                 <th className="p-3 text-right font-medium">Orders</th>
                 <th className="p-3 text-right font-medium">Pieces</th>
@@ -209,9 +209,9 @@ export default function StaffSalesPage() {
                       <td className="p-3 text-right">{r.count}</td>
                       <td className="p-3 text-right">{r.pcs}</td>
                       <td className="p-3 text-right font-semibold text-leaf-800">{inr(r.value)}</td>
-                      <td className="p-3 text-right">{inr(r.byStatus.Pending.value)}<span className="block text-[11px] text-muted">{r.byStatus.Pending.n} order{r.byStatus.Pending.n === 1 ? '' : 's'}</span></td>
-                      <td className="p-3 text-right">{inr(r.byStatus.Dispatched.value)}<span className="block text-[11px] text-muted">{r.byStatus.Dispatched.n} order{r.byStatus.Dispatched.n === 1 ? '' : 's'}</span></td>
-                      <td className="p-3 text-right">{inr(r.byStatus.Completed.value)}<span className="block text-[11px] text-muted">{r.byStatus.Completed.n} order{r.byStatus.Completed.n === 1 ? '' : 's'}</span></td>
+                      <td className="p-3 text-right">{inr(r.byStatus.Pending.value)}<span className="block text-[13px] text-muted">{r.byStatus.Pending.n} order{r.byStatus.Pending.n === 1 ? '' : 's'}</span></td>
+                      <td className="p-3 text-right">{inr(r.byStatus.Dispatched.value)}<span className="block text-[13px] text-muted">{r.byStatus.Dispatched.n} order{r.byStatus.Dispatched.n === 1 ? '' : 's'}</span></td>
+                      <td className="p-3 text-right">{inr(r.byStatus.Completed.value)}<span className="block text-[13px] text-muted">{r.byStatus.Completed.n} order{r.byStatus.Completed.n === 1 ? '' : 's'}</span></td>
                       <td className="p-3 text-right text-muted">{r.byStatus.Cancelled.n}</td>
                     </tr>
                     {isOpen && (

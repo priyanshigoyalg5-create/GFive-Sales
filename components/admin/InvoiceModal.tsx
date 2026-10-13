@@ -64,7 +64,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           {/* paper */}
-          <div className="mx-auto max-w-[680px] overflow-hidden rounded-lg bg-white text-[13px] text-ink shadow-soft">
+          <div className="mx-auto max-w-[680px] overflow-hidden rounded-lg bg-white text-[15px] text-ink shadow-soft">
             <div className="h-1.5 bg-leaf-900" />
             <div className="h-0.5 bg-gold-500" />
             <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-7">
@@ -89,7 +89,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
 
             <div className="grid gap-3 px-5 sm:grid-cols-2 sm:px-7">
               <div className="rounded-lg border border-line bg-cream/60 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-600">Bill to</p>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gold-600">Bill to</p>
                 <p className="mt-1 text-base font-semibold">{order.firmName}</p>
                 <p className="text-xs"><span className="text-muted">Mobile </span>{order.mobile}</p>
                 <p className="text-xs"><span className="text-muted">City </span>{order.city}</p>
@@ -97,7 +97,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                 {order.agentName && <p className="text-xs"><span className="text-muted">Agent </span>{order.agentName}</p>}
               </div>
               <div className="rounded-lg border border-line bg-cream/60 p-3 text-xs">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-600">Order summary</p>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gold-600">Order summary</p>
                 <p className="mt-1"><span className="text-muted">Designs </span>{lines.length}</p>
                 <p><span className="text-muted">Total pieces </span>{totalQty} pcs</p>
                 {lines.some((l) => l.salesPerson) && (
@@ -132,7 +132,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                                 )}
                                 <div>
                                   <p className="font-semibold">#{l.designNumber}</p>
-                                  <p className="text-[11px] text-muted">{[categoryName(l.category), l.fabric, l.work].filter(Boolean).join(' · ')}</p>
+                                  <p className="text-[13px] text-muted">{[categoryName(l.category), l.fabric, l.work].filter(Boolean).join(' · ')}</p>
                                 </div>
                               </div>
                             </td>
@@ -158,11 +158,11 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
 
             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-7">
               <div className="max-w-xs">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-600">Amount in words</p>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-gold-600">Amount in words</p>
                 <p className="mt-1 text-xs">{amountInWords(totalAmt)}</p>
                 {order.remarks && (
                   <>
-                    <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-600">Remarks</p>
+                    <p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-gold-600">Remarks</p>
                     <p className="mt-1 text-xs">{order.remarks}</p>
                   </>
                 )}
@@ -175,7 +175,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                 </div>
               </div>
             </div>
-            <div className="mx-5 border-t border-gold-500/60 py-2 text-[11px] text-muted sm:mx-7">{settings.invoiceNote}</div>
+            <div className="mx-5 border-t border-gold-500/60 py-2 text-[13px] text-muted sm:mx-7">{settings.invoiceNote}</div>
           </div>
         </div>
 
@@ -191,7 +191,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
               </button>
             )}
           </div>
-          <p className="mt-2 text-center text-[11px] text-muted">Need a paper copy? Download the PDF and print it from your PDF viewer.</p>
+          <p className="mt-2 text-center text-[13px] text-muted">Need a paper copy? Download the PDF and print it from your PDF viewer.</p>
         </div>
       </div>
     </div>

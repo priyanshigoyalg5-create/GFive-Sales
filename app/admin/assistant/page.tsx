@@ -136,10 +136,10 @@ export default function AssistantPage() {
         {cards.map(({ icon: Icon, label, value, sub }) => (
           <div key={label} className="card p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] uppercase tracking-[0.12em] text-muted">{label}</span>
+              <span className="text-[13px] uppercase tracking-[0.12em] text-muted">{label}</span>
               <Icon size={16} className="shrink-0 text-gold-600" />
             </div>
-            <p className="mt-2 truncate font-display text-[26px] font-semibold leading-none text-leaf-800">{value}</p>
+            <p className="mt-2 truncate font-display text-[28px] font-semibold leading-none text-leaf-800">{value}</p>
             <p className="mt-1 truncate text-xs text-muted">{sub}</p>
           </div>
         ))}
@@ -169,7 +169,7 @@ export default function AssistantPage() {
           {msgs.map((m, i) =>
             m.role === 'user' ? (
               <div key={i} className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-leaf-700 px-4 py-2.5 text-[15px] text-ivory">{m.content}</div>
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-leaf-700 px-4 py-2.5 text-[17px] text-ivory">{m.content}</div>
               </div>
             ) : (
               <div key={i} className="flex gap-3">
@@ -177,7 +177,7 @@ export default function AssistantPage() {
                   <Sparkles size={15} />
                 </span>
                 <div
-                  className={`max-w-[90%] space-y-1 rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed ${
+                  className={`max-w-[90%] space-y-1 rounded-2xl rounded-tl-md px-4 py-3 text-[17px] leading-relaxed ${
                     m.error ? 'border border-red-200 bg-red-50 text-red-800' : 'border border-line bg-cream/60 text-ink'
                   }`}
                 >
@@ -217,13 +217,13 @@ export default function AssistantPage() {
                 }
               }}
               placeholder={digest ? 'e.g. Pichle hafte Surat se kitna order aaya?' : 'Loading your sales data…'}
-              className="max-h-32 flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-muted/70"
+              className="max-h-32 flex-1 resize-none bg-transparent py-2 text-[17px] outline-none placeholder:text-muted/70"
             />
             <button type="submit" disabled={busy || !input.trim() || !digest} className="grid size-10 shrink-0 place-items-center rounded-xl bg-leaf-700 text-ivory disabled:opacity-40" aria-label="Send">
               {busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
             </button>
           </div>
-          <p className="mt-1.5 text-center text-[11px] text-muted">
+          <p className="mt-1.5 text-center text-[13px] text-muted">
             Cancelled &amp; trashed orders are not counted. A Sales Person gets credit for designs uploaded in their name.
           </p>
         </form>

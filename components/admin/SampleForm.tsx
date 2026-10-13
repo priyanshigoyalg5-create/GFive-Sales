@@ -220,7 +220,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.preview} alt="" className="size-full object-cover" />
               {i === 0 && (
-                <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-gold-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-gold-500 px-2 py-0.5 text-[12px] font-semibold text-white">
                   <Star size={10} fill="currentColor" /> Cover
                 </span>
               )}
@@ -232,7 +232,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
                   <ChevronLeft size={15} />
                 </button>
                 {i !== 0 && (
-                  <button type="button" onClick={() => makeCover(i)} className="rounded-full bg-white/85 px-2 text-[10px] font-medium text-ink">
+                  <button type="button" onClick={() => makeCover(i)} className="rounded-full bg-white/85 px-2 text-[12px] font-medium text-ink">
                     Set cover
                   </button>
                 )}
@@ -249,7 +249,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
           >
             <ImagePlus size={24} />
             <span className="text-xs font-medium">Add photos</span>
-            <span className="hidden text-[10px] text-muted sm:block">or drop here</span>
+            <span className="hidden text-[12px] text-muted sm:block">or drop here</span>
           </button>
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />

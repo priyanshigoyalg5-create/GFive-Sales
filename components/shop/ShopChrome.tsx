@@ -15,7 +15,7 @@ export function ShopHeader() {
         <a
           href={`https://wa.me/${s.whatsappNumber}`}
           target="_blank"
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[13px] text-leaf-800 hover:border-leaf-600/50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[15px] text-leaf-800 hover:border-leaf-600/50"
         >
           <MessageCircle size={15} /> <span className="hidden sm:inline">Need help?</span> WhatsApp
         </a>

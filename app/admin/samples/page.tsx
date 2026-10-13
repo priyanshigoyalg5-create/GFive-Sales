@@ -165,7 +165,7 @@ export default function AdminSamplesPage() {
                     </label>
                   )}
                   <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
-                  <div className="absolute inset-x-2 bottom-2 flex justify-between text-[11px]">
+                  <div className="absolute inset-x-2 bottom-2 flex justify-between text-[13px]">
                     {photos.length > 1 ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>
                     ) : <span />}
@@ -176,19 +176,19 @@ export default function AdminSamplesPage() {
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h2>
                     {categoryName(s.category) ? (
-                      <span className="shrink-0 rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(s.category)}</span>
+                      <span className="shrink-0 rounded-full bg-gold-50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(s.category)}</span>
                     ) : (
-                      <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700">No category</span>
+                      <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[12px] text-red-700">No category</span>
                     )}
                   </div>
                   <p className="line-clamp-1 text-xs text-muted">{[s.fabric, s.work].filter(Boolean).join(' · ') || '—'}</p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {colors.slice(0, 4).map((c) => (
-                      <span key={c.name} className="rounded-full bg-sand px-2 py-0.5 text-[11px]">{c.name}</span>
+                      <span key={c.name} className="rounded-full bg-sand px-2 py-0.5 text-[13px]">{c.name}</span>
                     ))}
-                    {colors.length > 4 && <span className="rounded-full bg-sand px-2 py-0.5 text-[11px]">+{colors.length - 4}</span>}
+                    {colors.length > 4 && <span className="rounded-full bg-sand px-2 py-0.5 text-[13px]">+{colors.length - 4}</span>}
                   </div>
-                  {owner(s) && <p className="mt-2 text-[11px] text-muted">Added by {s.createdByUid === uid ? 'you' : owner(s)}</p>}
+                  {owner(s) && <p className="mt-2 text-[13px] text-muted">Added by {s.createdByUid === uid ? 'you' : owner(s)}</p>}
 
                   <div className="mt-auto pt-3">
                     {s.isTrashed ? (

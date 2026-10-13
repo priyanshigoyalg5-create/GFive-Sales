@@ -170,7 +170,7 @@ export default function OrdersPage() {
               <span className="text-xs uppercase tracking-[0.12em] text-muted">{label}</span>
               <Icon size={17} className={tone} />
             </div>
-            <p className={`mt-2 font-display text-[28px] font-semibold leading-none ${tone}`}>{value}</p>
+            <p className={`mt-2 font-display text-[30px] font-semibold leading-none ${tone}`}>{value}</p>
           </div>
         ))}
       </div>
@@ -339,7 +339,7 @@ function OrderCard({
           <span className="font-display text-xl font-semibold text-leaf-800">{displayOrderId(o)}</span>
           <span className="text-xs text-muted">{date ? formatDate(date, true) : 'Just now'}</span>
           {categoryName(orderCategory(o)) && (
-            <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(orderCategory(o))}</span>
+            <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(orderCategory(o))}</span>
           )}
         </div>
         {o.isTrashed ? (
@@ -378,7 +378,7 @@ function OrderCard({
       <div className="grid gap-4 p-4 md:grid-cols-[240px_1fr]">
         {/* customer */}
         <div>
-          <p className="text-[17px] font-semibold leading-tight">{o.firmName}</p>
+          <p className="text-[19px] font-semibold leading-tight">{o.firmName}</p>
           <p className="mt-1 flex items-center gap-1.5 text-sm text-muted"><MapPin size={13} /> {o.city}</p>
           <div className="mt-2 flex gap-2">
             <a href={`tel:${o.mobile}`} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs text-leaf-800 hover:bg-leaf-50">
