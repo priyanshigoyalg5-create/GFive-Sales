@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, X, Send, Loader2, MessageCircle } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle } from 'lucide-react';
 import { useSamples } from '@/lib/hooks';
 import { useSettings } from '@/lib/settings';
 import { cldThumb, inr } from '@/lib/format';
@@ -28,6 +28,7 @@ export default function ChatAssistant() {
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [teaser, setTeaser] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -58,7 +59,36 @@ export default function ChatAssistant() {
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 150);
+    if (open) {
+      setTeaser(false);
+      try {
+        sessionStorage.setItem('gfive.chat.teased', '1');
+      } catch {
+        /* ignore */
+      }
+    }
   }, [open]);
+
+  // Small "Koi sawaal hai?" bubble a few seconds after the page opens (once per visit)
+  useEffect(() => {
+    if (!enabled) return;
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem('gfive.chat.teased') === '1';
+    } catch {
+      /* ignore */
+    }
+    if (seen) return;
+    const t = setTimeout(() => {
+      setTeaser(true);
+      try {
+        sessionStorage.setItem('gfive.chat.teased', '1');
+      } catch {
+        /* ignore */
+      }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [enabled]);
 
   const send = async (text: string) => {
     const t = text.trim();
@@ -95,18 +125,33 @@ export default function ChatAssistant() {
     <>
       {/* Launcher */}
       {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className={`fixed right-4 z-40 inline-flex h-13 items-center gap-2 rounded-full bg-leaf-800 pl-4 pr-5 text-sm font-medium text-ivory shadow-lift ring-1 ring-gold-400/40 transition hover:bg-leaf-900 active:scale-95 sm:right-6 ${
-            onProduct ? 'bottom-36 md:bottom-6' : 'bottom-5 sm:bottom-6'
-          }`}
-          aria-label="Open Gfive assistant"
-        >
-          <span className="grid size-8 place-items-center rounded-full bg-gold-500 text-white">
-            <Sparkles size={16} />
-          </span>
-          Ask Gfive
-        </button>
+        <div className={`fixed right-4 z-40 flex flex-col items-end gap-2 sm:right-6 ${onProduct ? 'bottom-36 md:bottom-6' : 'bottom-5 sm:bottom-6'}`}>
+          {teaser && (
+            <div className="relative max-w-[240px] rounded-2xl rounded-br-sm border border-line bg-ivory px-4 py-3 pr-8 text-sm text-ink shadow-lift animate-fade-up">
+              <button
+                onClick={() => setTeaser(false)}
+                className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full text-muted hover:bg-sand"
+                aria-label="Hide message"
+              >
+                <X size={13} />
+              </button>
+              <button onClick={() => setOpen(true)} className="text-left">
+                <span className="font-medium">Namaste! 🙏</span> Koi sawaal hai? Designs, price ya order ke baare mein mujhse chat karein.
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setOpen(true)}
+            className="group inline-flex h-14 items-center gap-2.5 rounded-full bg-leaf-800 pl-2 pr-5 text-[15px] font-medium text-ivory shadow-lift ring-2 ring-gold-400/50 transition hover:bg-leaf-900 active:scale-95"
+            aria-label="Chat with us"
+          >
+            <span className="relative grid size-10 place-items-center rounded-full bg-gold-500 text-white">
+              <MessageCircle size={20} fill="currentColor" className="text-white" />
+              <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#25d366] ring-2 ring-leaf-800" />
+            </span>
+            Chat with us
+          </button>
+        </div>
       )}
 
       {/* Panel */}
