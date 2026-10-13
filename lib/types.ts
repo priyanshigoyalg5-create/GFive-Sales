@@ -40,6 +40,8 @@ export interface Sample {
   colorDetails?: ColorDetail[];
   imageUrl?: string;
   sampleImages?: string[];
+  aiImages?: string[]; // photos in sampleImages that were made by AI (shown as "AI generated")
+  videoUrl?: string; // AI model video (Cloudinary)
   isTrashed?: boolean;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;

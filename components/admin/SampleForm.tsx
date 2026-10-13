@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import {
-  ImagePlus, X, Star, ChevronLeft, ChevronRight, Plus, Loader2, CheckCircle2, Copy, MessageCircle, ExternalLink,
+  ImagePlus, X, Star, ChevronLeft, ChevronRight, Plus, Loader2, CheckCircle2, Copy, MessageCircle, ExternalLink, Sparkles, Clapperboard,
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
@@ -15,12 +15,14 @@ import { cldThumb } from '@/lib/format';
 import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
 import type { Sample } from '@/lib/types';
 import { CATEGORIES, normCategory } from '@/lib/categories';
+import AiStudio from './AiStudio';
 
 interface Photo {
   id: string;
   url?: string; // already uploaded
   file?: File;
   preview: string;
+  ai?: boolean; // made by AI → labelled "AI generated"
 }
 interface ColorRow {
   id: string;
@@ -37,8 +39,11 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
   const editing = !!initial;
 
   const [photos, setPhotos] = useState<Photo[]>(() =>
-    initial ? samplePhotos(initial).map((u) => ({ id: uid(), url: u, preview: cldThumb(u, 400, 500) })) : [],
+    initial ? samplePhotos(initial).map((u) => ({ id: uid(), url: u, preview: cldThumb(u, 400, 500), ai: !!initial.aiImages?.includes(u) })) : [],
   );
+  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl || '');
+  const [ai, setAi] = useState<{ source: string } | null>(null);
+  const [aiPrep, setAiPrep] = useState(false);
   const [designNumber, setDesignNumber] = useState(initial?.designNumber || '');
   const [price, setPrice] = useState(initial ? String(initial.price ?? '') : '');
   const [fabric, setFabric] = useState(initial?.fabric || '');
@@ -87,6 +92,32 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
       return c;
     });
   const makeCover = (i: number) => setPhotos((p) => [p[i], ...p.filter((_, k) => k !== i)]);
+
+  // ---------------- AI model photo / video (works from the first ORIGINAL photo)
+  const openAi = async () => {
+    const idx = photos.findIndex((p) => !p.ai);
+    if (idx < 0) {
+      setErrors((e) => ({ ...e, photos: 'Add an original photo of the suit first' }));
+      return;
+    }
+    const p = photos[idx];
+    if (p.url) return setAi({ source: p.url });
+    setAiPrep(true);
+    try {
+      const url = await uploadImage(p.file!);
+      setPhotos((ps) => ps.map((x) => (x.id === p.id ? { ...x, url, file: undefined } : x)));
+      setAi({ source: url });
+    } catch (err) {
+      setErrors((e) => ({ ...e, photos: (err as Error).message }));
+    } finally {
+      setAiPrep(false);
+    }
+  };
+  const addAiPhoto = (url: string, asCover: boolean) =>
+    setPhotos((ps) => {
+      const item = { id: uid(), url, preview: cldThumb(url, 400, 500), ai: true };
+      return asCover ? [item, ...ps] : [...ps, item];
+    });
 
   // ---------------- colours
   const addQuickColors = () => {
@@ -156,6 +187,8 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         colorDetails,
         imageUrl: photoUrls[0],
         sampleImages: photoUrls,
+        aiImages: photoUrls.filter((_, i) => photos[i].ai),
+        videoUrl,
         updatedAt: serverTimestamp(),
       };
 
@@ -186,6 +219,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
 
   const reset = () => {
     setPhotos([]);
+    setVideoUrl('');
     setDesignNumber('');
     setPrice('');
     setDescription('');
@@ -216,7 +250,8 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
           className={`mt-4 grid grid-cols-3 gap-3 rounded-2xl sm:grid-cols-4 ${drag ? 'ring-2 ring-gold-500 ring-offset-4 ring-offset-ivory' : ''}`}
         >
           {photos.map((p, i) => (
-            <div key={p.id} className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-sand ring-1 ring-line">
+            <figure key={p.id}>
+            <div className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-sand ring-1 ring-line">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.preview} alt="" className="size-full object-cover" />
               {i === 0 && (
@@ -241,6 +276,10 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
                 </button>
               </div>
             </div>
+            <figcaption className={`mt-1 text-center text-xs font-medium ${p.ai ? 'text-gold-600' : 'text-muted'}`}>
+              {p.ai ? 'AI generated' : 'Original'}
+            </figcaption>
+            </figure>
           ))}
           <button
             type="button"
@@ -255,7 +294,36 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
         {errors.photos && <p className="mt-2 text-sm text-red-700">{errors.photos}</p>}
         <p className="mt-3 text-xs text-muted">Tip: select several photos at once. Big phone photos are compressed automatically before upload.</p>
+
+        <div className="mt-4 rounded-2xl border border-gold-500/40 bg-gold-50/60 p-4">
+          <p className="flex items-center gap-2 font-medium text-ink"><Sparkles size={16} className="text-gold-600" /> AI model photo &amp; video</p>
+          <p className="mt-1 text-xs text-muted">Turn the original suit photo into a photo and a short video of a model wearing it. Marked “AI generated” everywhere.</p>
+          <button type="button" className="btn btn-gold mt-3 w-full sm:w-auto" onClick={openAi} disabled={aiPrep || !photos.some((p) => !p.ai)}>
+            {aiPrep ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Create with AI
+          </button>
+          {videoUrl && (
+            <figure className="mt-3">
+              <video src={videoUrl} controls playsInline className="max-h-72 rounded-xl bg-black" />
+              <figcaption className="mt-1 flex items-center gap-3 text-xs font-medium text-gold-600">
+                <span className="inline-flex items-center gap-1"><Clapperboard size={13} /> AI generated video</span>
+                <button type="button" className="text-red-700 underline" onClick={() => setVideoUrl('')}>Remove</button>
+              </figcaption>
+            </figure>
+          )}
+        </div>
       </section>
+      {ai && (
+        <AiStudio
+          sourceUrl={ai.source}
+          designNumber={designNumber || 'new'}
+          aiPhotos={photos.filter((p) => p.ai && p.url).map((p) => p.url!)}
+          videoUrl={videoUrl || undefined}
+          canSave
+          onAddPhoto={addAiPhoto}
+          onSaveVideo={(u) => setVideoUrl(u)}
+          onClose={() => setAi(null)}
+        />
+      )}
 
       {/* ------------- details */}
       <div className="space-y-6">

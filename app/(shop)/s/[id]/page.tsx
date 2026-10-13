@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, CheckCircle2, Share2 } from 'lucide-react';
 import type { OrderLine, Sample } from '@/lib/types';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
-import { sampleColors, samplePhotos, allSamplePhotos, sampleLink } from '@/lib/samples';
+import { sampleColors, samplePhotos, allSamplePhotos, sampleLink, isAiPhoto } from '@/lib/samples';
 import { buildOrderWhatsAppText, type CustomerDetails } from '@/lib/orders';
 import { loadCustomer, saveCustomer } from '@/lib/customer';
 import { createOrder, getPublicStaff, getSample, nextOrderNumber, usePublicSettings } from '@/lib/public-db';
@@ -299,6 +299,11 @@ export default function SampleOrderPage() {
             >
               <Expand size={13} /> Tap to zoom
             </button>
+            {photos[active] && (
+              <span className={`absolute bottom-3 left-3 rounded-full px-3 py-1.5 text-xs font-medium shadow backdrop-blur ${isAiPhoto(sample, photos[active]) ? 'bg-gold-600/90 text-white' : 'bg-white/85 text-ink'}`}>
+                {isAiPhoto(sample, photos[active]) ? 'AI generated' : 'Original photo'}
+              </span>
+            )}
             {photos.length > 1 && (
               <>
                 <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] text-white backdrop-blur">
@@ -314,14 +319,25 @@ export default function SampleOrderPage() {
             )}
           </div>
           {photos.length > 1 && (
-            <div className="mt-3 flex gap-2 overflow-x-auto">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {photos.map((p, i) => (
-                <button key={p} onClick={() => setActive(i)} aria-label={`Show photo ${i + 1}`} aria-pressed={i === active} className={`h-20 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === active ? 'border-gold-500' : 'border-transparent opacity-60'}`}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cldThumb(p, 128, 160)} alt="" width={64} height={80} loading="lazy" className="size-full object-cover" />
+                <button key={p} onClick={() => setActive(i)} aria-label={`Show photo ${i + 1}`} aria-pressed={i === active} className="w-16 shrink-0 text-center">
+                  <span className={`block h-20 w-16 overflow-hidden rounded-lg border-2 ${i === active ? 'border-gold-500' : 'border-transparent opacity-60'}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={cldThumb(p, 128, 160)} alt="" width={64} height={80} loading="lazy" className="size-full object-cover" />
+                  </span>
+                  <span className={`mt-1 block text-[12px] leading-tight ${isAiPhoto(sample, p) ? 'font-medium text-gold-600' : 'text-muted'}`}>
+                    {isAiPhoto(sample, p) ? 'AI generated' : 'Original'}
+                  </span>
                 </button>
               ))}
             </div>
+          )}
+          {sample.videoUrl && (
+            <figure className="mt-4">
+              <video src={sample.videoUrl} controls playsInline preload="metadata" poster={cldThumb(photos.find((p) => isAiPhoto(sample, p)) || photos[0], 720, 1280)} className="mx-auto max-h-[70vh] w-full rounded-2xl bg-black object-contain" />
+              <figcaption className="mt-1.5 text-center text-xs font-medium text-gold-600">AI generated video</figcaption>
+            </figure>
           )}
         </div>
 
@@ -472,7 +488,7 @@ export default function SampleOrderPage() {
           index={viewer}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}
-          caption={(i) => colors.find((col) => col.photoUrl === viewerPhotos[i])?.name}
+          caption={(i) => (isAiPhoto(sample, viewerPhotos[i]) ? 'AI generated' : colors.find((col) => col.photoUrl === viewerPhotos[i])?.name || 'Original photo')}
         />
       )}
     </div>

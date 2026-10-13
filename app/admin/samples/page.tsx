@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2 } from 'lucide-react';
+import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Clapperboard } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { useOrders, useSamples } from '@/lib/hooks';
@@ -13,6 +13,7 @@ import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@
 import PageHeader from '@/components/admin/PageHeader';
 import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
 import type { Sample } from '@/lib/types';
+import AiStudio from '@/components/admin/AiStudio';
 
 export default function AdminSamplesPage() {
   const { isSuper, profile } = useAuth();
@@ -26,6 +27,7 @@ export default function AdminSamplesPage() {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [aiFor, setAiFor] = useState<Sample | null>(null);
 
   const pcsByDesign = useMemo(() => {
     const m = new Map<string, number>();
@@ -166,12 +168,16 @@ export default function AdminSamplesPage() {
                   )}
                   <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
                   <div className="absolute inset-x-2 bottom-2 flex justify-between text-[13px]">
-                    {photos.length > 1 ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>
-                    ) : <span />}
+                    <span className="flex gap-1">
+                      {photos.length > 1 && <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>}
+                      {s.videoUrl && <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-white"><Clapperboard size={11} /> Video</span>}
+                    </span>
                     {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {isSuper ? 'ordered' : 'by you'}</span>}
                   </div>
                 </div>
+                <p className={`border-b border-line py-1 text-center text-xs font-medium ${photos[0] && s.aiImages?.includes(photos[0]) ? 'text-gold-600' : 'text-muted'}`}>
+                  {photos[0] && s.aiImages?.includes(photos[0]) ? 'AI generated' : 'Original'}
+                </p>
                 <div className="flex flex-1 flex-col p-3">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h2>
@@ -210,6 +216,11 @@ export default function AdminSamplesPage() {
                         <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid, profile?.name)}>
                           <MessageCircle size={14} /> Share
                         </button>
+                        {photos.some((u) => !s.aiImages?.includes(u)) && (
+                          <button className="btn btn-sm btn-outline mt-2 w-full !border-gold-500/50 !text-gold-600" onClick={() => setAiFor(s)}>
+                            <Sparkles size={14} /> AI model photo / video
+                          </button>
+                        )}
                         <div className={`mt-2 grid gap-1.5 ${canEdit(s) ? 'grid-cols-4' : 'grid-cols-2'}`}>
                           <IconBtn
                             label={copied === s.id ? 'Copied' : 'Copy link'}
@@ -244,6 +255,29 @@ export default function AdminSamplesPage() {
           })}
         </div>
       )}
+      {aiFor && (() => {
+        const live = samples.find((x) => x.id === aiFor.id) || aiFor;
+        const ph = samplePhotos(live);
+        const original = ph.find((u) => !live.aiImages?.includes(u)) || ph[0];
+        return (
+          <AiStudio
+            sourceUrl={original}
+            designNumber={live.designNumber}
+            aiPhotos={live.aiImages || []}
+            videoUrl={live.videoUrl}
+            canSave={canEdit(live)}
+            onAddPhoto={async (url, asCover) => {
+              const rest = ph.filter((u) => u !== url);
+              const list = asCover ? [url, ...rest] : [...rest, url];
+              await updateDoc(doc(db, 'samples', live.id), { sampleImages: list, imageUrl: list[0], aiImages: Array.from(new Set([...(live.aiImages || []), url])) });
+            }}
+            onSaveVideo={async (url) => {
+              await updateDoc(doc(db, 'samples', live.id), { videoUrl: url });
+            }}
+            onClose={() => setAiFor(null)}
+          />
+        );
+      })()}
     </>
   );
 }
