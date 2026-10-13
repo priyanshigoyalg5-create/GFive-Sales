@@ -42,3 +42,13 @@ npm run dev
 ```
 
 PDF invoices embed a subset of the Carlito font (SIL Open Font License) from `public/fonts` so that ₹ prints correctly.
+
+## AI shopping assistant (optional)
+
+The "Ask Gfive" chat on the shop answers customer questions (English / Hindi / Hinglish / Bengali) using the live catalogue and recommends designs with photo cards. It uses Claude through the Anthropic API.
+
+1. Create an API key at https://console.anthropic.com (add a small prepaid credit and a monthly spend limit).
+2. Vercel → Environment Variables: `ANTHROPIC_API_KEY=<key>` (server-only — never prefix with `NEXT_PUBLIC_`). Optional: `CHAT_MODEL` (default `claude-haiku-5-5`).
+3. Redeploy. Without the key, the chat button is simply hidden.
+
+The assistant never invents designs or prices, and sends customers to WhatsApp for stock, delivery dates, discounts and order status.

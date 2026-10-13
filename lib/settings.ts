@@ -4,18 +4,9 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import type { CompanySettings } from './types';
+import { DEFAULT_SETTINGS } from './settings-defaults';
 
-export const DEFAULT_SETTINGS: CompanySettings = {
-  companyName: 'Gfive Designer Studio Pvt Ltd',
-  addressLine: '113, Park Street, Poddar Point, Block-A, 3rd Floor, Kolkata 700016',
-  email: 'info@gfive.co.in',
-  website: 'www.gfive.co.in',
-  gstin: '19AJCG3693D1ZD',
-  whatsappNumber: '919163932222',
-  storePhone: '7044447483',
-  instagram: 'gfiveindia',
-  invoiceNote: 'Thank you for your business!',
-};
+export { DEFAULT_SETTINGS };
 
 export const SETTINGS_DOC = doc(db, 'settings', 'company');
 
