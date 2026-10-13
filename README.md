@@ -61,7 +61,7 @@ Staff can ask things like "Aaj kitne orders aaye?", "Is mahine sabse zyada kauns
 
 ## AI model photo & video (Samples → "AI model photo / video", or Add/Edit sample → "Create with AI")
 
-Turns the original photo of an unstitched suit into a catalogue photo of a model wearing it, and that photo into a 9:16 model video of 15 s (8 s clip + one Veo extension, ~₹140) or 8 s (~₹70).
+Turns the original photo of an unstitched suit into a catalogue photo of a model wearing it, and that photo into an 8-second 9:16 model video (~₹70). A 15 s option (Veo extension) exists in code but is switched off in AiStudio.
 
 - Photo: Google Nano Banana Pro (`gemini-3-pro-image`, ~$0.13 ≈ ₹12 each). Video: Google Veo 3.1 Fast (`veo-3.1-fast-generate-preview`, 8 s 720p ≈ $0.80 ≈ ₹70). Override with `GEMINI_IMAGE_MODEL` / `GEMINI_VIDEO_MODEL`.
 - Needs `GEMINI_API_KEY` on Vercel (server only — never `NEXT_PUBLIC_`). Create it in Google AI Studio (https://aistudio.google.com/apikey) on a project with billing enabled, and set a budget alert in Google Cloud Billing.

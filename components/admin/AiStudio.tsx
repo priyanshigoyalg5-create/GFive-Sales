@@ -38,7 +38,7 @@ export default function AiStudio({
   const [added, setAdded] = useState<string[]>(aiPhotos);
   const [busy, setBusy] = useState<'photo' | 'video' | 'save' | null>(null);
   const [secs, setSecs] = useState(0);
-  const [long, setLong] = useState(true); // 15 s (8 s + Google extension) or 8 s
+  const long = false; // 8 s clips (the 15 s Veo extension is kept in code but switched off)
   const [stage, setStage] = useState<'first' | 'extending'>('first');
   const [note, setNote] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(savedVideo || null);
@@ -214,17 +214,7 @@ export default function AiStudio({
 
           {/* video */}
           <div className="card space-y-3 p-4">
-            <p className="flex items-center gap-2 font-display text-xl font-semibold"><Clapperboard size={18} className="text-gold-600" /> Model video</p>
-            <div className="flex gap-2" role="group" aria-label="Video length">
-              {[
-                { v: true, label: '15 sec', cost: '~₹140' },
-                { v: false, label: '8 sec', cost: '~₹70' },
-              ].map((o) => (
-                <button key={o.label} type="button" disabled={!!busy} onClick={() => setLong(o.v)} aria-pressed={long === o.v} className={`chip ${long === o.v ? 'chip-active' : ''}`}>
-                  {o.label} <span className="opacity-70">{o.cost}</span>
-                </button>
-              ))}
-            </div>
+            <p className="flex items-center gap-2 font-display text-xl font-semibold"><Clapperboard size={18} className="text-gold-600" /> Model video (8 sec)</p>
             {video ? (
               <figure>
                 <video src={video} controls playsInline className="mx-auto max-h-[60vh] rounded-2xl bg-black" />
