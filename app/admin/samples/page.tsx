@@ -207,7 +207,7 @@ export default function AdminSamplesPage() {
                       </div>
                     ) : (
                       <>
-                        <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid)}>
+                        <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid, profile?.name)}>
                           <MessageCircle size={14} /> Share
                         </button>
                         <div className={`mt-2 grid gap-1.5 ${canEdit(s) ? 'grid-cols-4' : 'grid-cols-2'}`}>

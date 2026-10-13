@@ -5,6 +5,7 @@ import { Copy, Check, ImageIcon, Loader2, MessageCircle, Send, X } from 'lucide-
 import type { Order } from '@/lib/types';
 import { digitsOnly } from '@/lib/format';
 import { buildOrderWhatsAppText, displayOrderId, getOrderLines, orderSeller } from '@/lib/orders';
+import { sampleLink } from '@/lib/samples';
 
 /** Order message (same format as the WhatsApp order) for the salesperson to send to their customer. */
 export function customerOrderText(o: Order): string {
@@ -17,7 +18,7 @@ export function customerOrderText(o: Order): string {
     gstNo: o.gstNo || '',
     agentName: o.agentName || '',
     remarks: o.remarks || '',
-  });
+  }, lines[0]?.sampleId ? sampleLink(lines[0].sampleId, seller.uid) : '');
 }
 
 function jpg(url: string) {

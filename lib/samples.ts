@@ -34,25 +34,25 @@ export function sampleLink(id: string, ref?: string | null): string {
   return `${origin}/s/${id}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`;
 }
 
-export function sampleShareText(s: Sample, link: string): string {
+export function sampleShareText(s: Sample, link: string, salesPerson?: string): string {
+  // Same layout as the original GFive sample message
   return (
-    `*GFive Kolkata*\n` +
-    `_Glamour Grace Unlimited_\n\n` +
+    `*Gfive -Kolkata*\n` +
     `*NEW UNSTITCHED SUIT SAMPLE*\n\n` +
+    (categoryName(s.category) ? `*✦ DESIGN CATEGORY: ${categoryName(s.category).toUpperCase()} ✦*\n\n` : '') +
     `*Design No:* ${s.designNumber}\n` +
-    (categoryName(s.category) ? `*Category:* ${categoryName(s.category)}\n` : '') +
     `*Rate:* ₹${s.price}/pc\n` +
     (s.fabric ? `*Fabric:* ${s.fabric}\n` : '') +
     (s.work ? `*Work:* ${s.work}\n` : '') +
-    (sampleColors(s).length ? `*Colours:* ${sampleColors(s).map((c) => c.name).join(', ')}\n` : '') +
-    `\n👇 *View photos & place your order:*\n${link}`
+    (salesPerson ? `*Sales Person:* ${salesPerson}\n` : '') +
+    `\n👇 *Click link to view details & place order:*\n${link}`
   );
 }
 
 /** Tries native share with the cover photo; falls back to a WhatsApp text link. */
-export async function shareSampleOnWhatsApp(s: Sample, ref?: string | null): Promise<void> {
+export async function shareSampleOnWhatsApp(s: Sample, ref?: string | null, salesPerson?: string): Promise<void> {
   const link = sampleLink(s.id, ref);
-  const text = sampleShareText(s, link);
+  const text = sampleShareText(s, link, salesPerson);
   const cover = samplePhotos(s)[0];
   if (typeof navigator !== 'undefined' && navigator.share && cover) {
     try {

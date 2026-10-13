@@ -385,7 +385,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
               <span className="flex-1 truncate">{sampleLink(saved.id, profile?.uid)}</span>
             </div>
             <div className="mt-4 grid gap-2.5">
-              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved, profile?.uid)}>
+              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved, profile?.uid, profile?.name)}>
                 <MessageCircle size={18} /> Share on WhatsApp
               </button>
               <div className="grid grid-cols-2 gap-2.5">

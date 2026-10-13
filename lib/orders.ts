@@ -107,7 +107,11 @@ export interface CustomerDetails {
   remarks: string;
 }
 
-export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: CustomerDetails, origin = ''): string {
+/**
+ * WhatsApp order message. `link` = the design page (with the salesperson's ref);
+ * WhatsApp shows the design photo as a preview of that link.
+ */
+export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: CustomerDetails, link = ''): string {
   const totalQty = lines.reduce((a, l) => a + l.totalQuantity, 0);
   const totalAmt = lines.reduce((a, l) => a + l.totalAmount, 0);
   const first = lines[0];
@@ -118,7 +122,11 @@ export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: C
   if (cats.length) t += `*✦ DESIGN CATEGORY: ${cats.join(', ').toUpperCase()} ✦*\n\n`;
   t += `*Order No:* ${orderNo}\n`;
   t += `*Design No:* ${lines.map((l) => l.designNumber).join(', ')}\n`;
-  if (lines.length === 1) t += `*Price:* ${inr(first.price)}/pc\n`;
+  if (lines.length === 1) {
+    t += `*Price:* ${inr(first.price)}/pc\n`;
+    if (first.fabric) t += `*Fabric:* ${first.fabric}\n`;
+    if (first.work) t += `*Work:* ${first.work}\n`;
+  }
   const sp = Array.from(new Set(lines.map((l) => l.salesPerson).filter(Boolean))).join(', ');
   if (sp) t += `*Sales Person:* ${sp}\n`;
   t += `\n*CUSTOMER DETAILS:*\n`;
@@ -133,11 +141,11 @@ export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: C
     Object.entries(l.items).forEach(([color, qty]) => {
       if (qty > 0) t += `• *${color}* -----------> *${qty} pcs*\n`;
     });
-    if (l.sampleId && origin) t += `${origin}/s/${l.sampleId}\n`;
   });
   t += `-------------------------------\n`;
   t += `*TOTAL:* ${totalQty} pcs\n`;
   t += `*TOTAL AMOUNT:* ${inr(totalAmt)}\n`;
   t += `-------------------------------`;
+  if (link) t += `\n\n👇 *Design photo & details:*\n${link}`;
   return t;
 }

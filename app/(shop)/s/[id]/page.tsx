@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, Che
 import { db } from '@/lib/firebase';
 import type { OrderLine, Sample } from '@/lib/types';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
-import { sampleColors, samplePhotos, allSamplePhotos } from '@/lib/samples';
+import { sampleColors, samplePhotos, allSamplePhotos, sampleLink } from '@/lib/samples';
 import { buildOrderWhatsAppText, nextOrderNumber, type CustomerDetails } from '@/lib/orders';
 import { loadCustomer, saveCustomer } from '@/lib/customer';
 import { useSettings } from '@/lib/settings';
@@ -156,7 +156,8 @@ export default function SampleOrderPage() {
         createdAt: serverTimestamp(),
       });
       saveCustomer({ ...clean, remarks: '' });
-      const text = buildOrderWhatsAppText(orderNo, [line], clean, '');
+      // link with the salesperson's ref → WhatsApp shows the design photo preview in their chat
+      const text = buildOrderWhatsAppText(orderNo, [line], clean, sampleLink(sample.id, seller?.uid));
       setPlaced({ orderNo, text, pcs: totalPcs, amount: totalAmt, to: targetNumber });
       window.scrollTo({ top: 0 });
       // Order is saved; now open the salesperson's WhatsApp chat with the message prefilled.
