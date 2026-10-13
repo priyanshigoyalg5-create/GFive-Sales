@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Order, Sample } from './types';
+import { useAuth } from './auth';
+import { tsToDate } from './format';
 
 export function useSamples() {
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -27,17 +29,31 @@ export function useSamples() {
   return { samples, loading, error };
 }
 
+/**
+ * Orders visible to the signed-in person.
+ * - Super Admin: every order.
+ * - Admin (staff): ONLY orders credited to them (salesPersonUid == their uid).
+ *   The Firestore rules enforce the same thing, so other staff's orders can't be
+ *   read even with a hand-made request.
+ */
 export function useOrders(enabled = true) {
+  const { profile, isSuper } = useAuth();
+  const uid = profile?.uid || '';
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!enabled) return;
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+    if (!enabled || !uid) return;
+    const q = isSuper
+      ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
+      : query(collection(db, 'orders'), where('salesPersonUid', '==', uid));
     return onSnapshot(
       q,
       (snap) => {
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Order, 'id'>) })));
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Order, 'id'>) }));
+        // newest first (staff query has no orderBy so it needs no composite index)
+        list.sort((a, b) => (tsToDate(b.createdAt)?.getTime() ?? Date.now()) - (tsToDate(a.createdAt)?.getTime() ?? Date.now()));
+        setOrders(list);
         setLoading(false);
       },
       (err) => {
@@ -46,6 +62,6 @@ export function useOrders(enabled = true) {
         setLoading(false);
       },
     );
-  }, [enabled]);
+  }, [enabled, uid, isSuper]);
   return { orders, loading, error };
 }

@@ -13,6 +13,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, getAppAuth } from './firebase';
 import type { Role, StaffProfile } from './types';
+import { syncPublicStaff } from './staff';
 
 /** Comma separated list of e-mails that are always Super Admin (bootstrap). */
 export const SUPERADMIN_EMAILS = (process.env.NEXT_PUBLIC_SUPERADMIN_EMAILS || '')
@@ -50,7 +51,10 @@ async function loadProfile(user: User): Promise<AuthState> {
       }
       // Bootstrap emails are always super admin even if the doc says otherwise.
       const role: Role = SUPERADMIN_EMAILS.includes(email) ? 'superadmin' : data.role || 'admin';
-      return { status: 'ready', user, profile: { ...data, uid: user.uid, role, active: true } };
+      const profile: StaffProfile = { ...data, uid: user.uid, role, active: true };
+      // make sure the public profile used by customer links exists
+      syncPublicStaff({ uid: user.uid, name: profile.name, whatsappNumber: profile.whatsappNumber || '', active: true }).catch(() => {});
+      return { status: 'ready', user, profile };
     }
     if (SUPERADMIN_EMAILS.includes(email)) {
       const profile: StaffProfile = {
@@ -61,6 +65,7 @@ async function loadProfile(user: User): Promise<AuthState> {
         active: true,
       };
       await setDoc(ref, { ...profile, createdAt: serverTimestamp() });
+      await syncPublicStaff({ uid: user.uid, name: profile.name, whatsappNumber: '', active: true }).catch(() => {});
       return { status: 'ready', user, profile };
     }
     return {

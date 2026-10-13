@@ -14,6 +14,7 @@ import { uploadImage } from '@/lib/upload';
 import { cldThumb } from '@/lib/format';
 import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
 import type { Sample } from '@/lib/types';
+import { CATEGORIES, normCategory } from '@/lib/categories';
 
 interface Photo {
   id: string;
@@ -43,7 +44,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
   const [fabric, setFabric] = useState(initial?.fabric || '');
   const [work, setWork] = useState(initial?.work || '');
   const [description, setDescription] = useState(initial?.description || '');
-  const [salesPerson, setSalesPerson] = useState(initial?.salesPerson || profile?.name || '');
+  const [category, setCategory] = useState<string>(normCategory(initial?.category));
   const [colors, setColors] = useState<ColorRow[]>(() =>
     initial && sampleColors(initial).length
       ? sampleColors(initial).map((c) => ({
@@ -106,7 +107,8 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
     if (!photos.length) errs.photos = 'Add at least one sample photo';
     if (!designNumber.trim()) errs.designNumber = 'Required';
     if (!price || Number(price) <= 0) errs.price = 'Enter rate per piece';
-    if (!salesPerson.trim()) errs.salesPerson = 'Required';
+    if (!normCategory(category)) errs.category = 'Please select a design category';
+    if (!profile) errs.form = 'Please sign in again.';
     const validColors = colors.filter((c) => c.name.trim());
     if (!validColors.length) errs.colors = 'Add at least one colour';
     const names = validColors.map((c) => c.name.trim().toLowerCase());
@@ -149,7 +151,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         fabric: fabric.trim(),
         work: work.trim(),
         description: description.trim(),
-        salesPerson: salesPerson.trim(),
+        category: normCategory(category),
         colors: colorDetails.map((c) => c.name),
         colorDetails,
         imageUrl: photoUrls[0],
@@ -161,11 +163,15 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
       if (editing && id) {
         await updateDoc(doc(db, 'samples', id), payload);
       } else {
+        // owner = the logged-in staff member (set automatically, never typed)
         const ref = await addDoc(collection(db, 'samples'), {
           ...payload,
+          salesPerson: profile!.name, // legacy display field
+          createdByUid: profile!.uid,
+          createdByName: profile!.name,
+          createdBy: profile!.email || '',
           isTrashed: false,
           createdAt: serverTimestamp(),
-          createdBy: profile?.email || '',
         });
         id = ref.id;
       }
@@ -279,14 +285,35 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             </label>
           </div>
           <label className="block">
+            <span className="field-label">Design category *</span>
+            <select
+              className={`input appearance-none ${errors.category ? '!border-red-600' : ''}`}
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setErrors((x) => ({ ...x, category: '' }));
+              }}
+              required
+            >
+              <option value="" disabled>
+                Select category…
+              </option>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {errors.category && <span className="mt-1 block text-xs text-red-700">{errors.category}</span>}
+          </label>
+          <label className="block">
             <span className="field-label">Description (optional)</span>
             <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Dupatta, bottom, any extra details shown to customers" />
           </label>
-          <label className="block">
-            <span className="field-label">Sales person *</span>
-            <input className="input" value={salesPerson} onChange={(e) => setSalesPerson(e.target.value)} />
-            {errors.salesPerson && <span className="mt-1 block text-xs text-red-700">{errors.salesPerson}</span>}
-          </label>
+          <p className="rounded-xl bg-sand/60 px-3.5 py-2.5 text-sm text-muted">
+            Added by <span className="font-medium text-ink">{editing ? initial?.createdByName || initial?.salesPerson || '—' : profile?.name}</span>
+            {!editing && ' (set automatically)'}
+          </p>
         </section>
 
         <section className="card p-5">
@@ -355,10 +382,10 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             <h3 className="mt-3 font-display text-3xl font-semibold">{editing ? 'Changes saved' : 'Sample created'}</h3>
             <p className="mt-1 text-sm text-muted">Design #{saved.designNumber} is ready — share the link with customers.</p>
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-sand/70 px-3 py-2 text-left text-xs text-ink">
-              <span className="flex-1 truncate">{sampleLink(saved.id)}</span>
+              <span className="flex-1 truncate">{sampleLink(saved.id, profile?.uid)}</span>
             </div>
             <div className="mt-4 grid gap-2.5">
-              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved)}>
+              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved, profile?.uid)}>
                 <MessageCircle size={18} /> Share on WhatsApp
               </button>
               <div className="grid grid-cols-2 gap-2.5">
@@ -366,14 +393,14 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
                   type="button"
                   className="btn btn-outline"
                   onClick={async () => {
-                    await navigator.clipboard.writeText(sampleLink(saved.id));
+                    await navigator.clipboard.writeText(sampleLink(saved.id, profile?.uid));
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1800);
                   }}
                 >
                   <Copy size={15} /> {copied ? 'Copied!' : 'Copy link'}
                 </button>
-                <a href={`/s/${saved.id}`} target="_blank" className="btn btn-outline">
+                <a href={sampleLink(saved.id, profile?.uid)} target="_blank" className="btn btn-outline">
                   <ExternalLink size={15} /> Open
                 </a>
               </div>

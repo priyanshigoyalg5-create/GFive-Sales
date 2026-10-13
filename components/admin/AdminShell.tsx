@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles } from 'lucide-react';
+import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: '/admin/samples', label: 'Samples', icon: Shirt, superOnly: false },
   { href: '/admin/samples/new', label: 'Add Sample', icon: PlusCircle, superOnly: false },
   { href: '/admin/assistant', label: 'Ask AI', icon: Sparkles, superOnly: false },
+  { href: '/admin/staff-sales', label: 'Staff Sales', icon: BarChart3, superOnly: true },
   { href: '/admin/team', label: 'Team', icon: Users, superOnly: true },
   { href: '/admin/settings', label: 'Settings', icon: Settings, superOnly: true },
 ];
@@ -82,7 +83,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           ))}
         </nav>
         <div className="m-3 rounded-xl bg-white/5 p-3">
-          <p className="truncate text-sm font-medium">{profile?.name}</p>
+          <Link href="/admin/profile" className="block truncate text-sm font-medium hover:text-gold-100">{profile?.name}</Link>
           <p className="flex items-center gap-1 text-xs text-gold-100/80">
             {isSuper && <Crown size={12} />} {isSuper ? 'Super Admin' : 'Admin'}
           </p>
@@ -102,10 +103,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="flex items-center gap-1">
           {isSuper && (
             <>
+              <Link href="/admin/staff-sales" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Staff sales"><BarChart3 size={18} /></Link>
               <Link href="/admin/team" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Team"><Users size={18} /></Link>
               <Link href="/admin/settings" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Settings"><Settings size={18} /></Link>
             </>
           )}
+          <Link href="/admin/profile" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="My profile"><UserRound size={18} /></Link>
           <button onClick={() => signOut()} className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Sign out">
             <LogOut size={18} />
           </button>

@@ -1,3 +1,4 @@
+import { categoryName } from './categories';
 import type { ColorDetail, Sample } from './types';
 
 /** All main photos of a sample, de-duplicated, cover photo first. */
@@ -27,9 +28,10 @@ export function allSamplePhotos(s: Sample): string[] {
   return list;
 }
 
-export function sampleLink(id: string): string {
+/** Customer link for a design. `ref` = uid of the staff member sharing it, so the order is credited to them. */
+export function sampleLink(id: string, ref?: string | null): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/s/${id}`;
+  return `${origin}/s/${id}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`;
 }
 
 export function sampleShareText(s: Sample, link: string): string {
@@ -38,6 +40,7 @@ export function sampleShareText(s: Sample, link: string): string {
     `_Glamour Grace Unlimited_\n\n` +
     `*NEW UNSTITCHED SUIT SAMPLE*\n\n` +
     `*Design No:* ${s.designNumber}\n` +
+    (categoryName(s.category) ? `*Category:* ${categoryName(s.category)}\n` : '') +
     `*Rate:* ₹${s.price}/pc\n` +
     (s.fabric ? `*Fabric:* ${s.fabric}\n` : '') +
     (s.work ? `*Work:* ${s.work}\n` : '') +
@@ -47,8 +50,8 @@ export function sampleShareText(s: Sample, link: string): string {
 }
 
 /** Tries native share with the cover photo; falls back to a WhatsApp text link. */
-export async function shareSampleOnWhatsApp(s: Sample): Promise<void> {
-  const link = sampleLink(s.id);
+export async function shareSampleOnWhatsApp(s: Sample, ref?: string | null): Promise<void> {
+  const link = sampleLink(s.id, ref);
   const text = sampleShareText(s, link);
   const cover = samplePhotos(s)[0];
   if (typeof navigator !== 'undefined' && navigator.share && cover) {

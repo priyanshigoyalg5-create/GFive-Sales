@@ -3,7 +3,8 @@
  * here (never in the AI) so the figures shown to staff are always correct.
  */
 import type { Order, Sample } from './types';
-import { getOrderLines, orderStatus, displayOrderId } from './orders';
+import { getOrderLines, orderStatus, displayOrderId, orderSeller, orderCategory } from './orders';
+import { categoryName } from './categories';
 import { tsToDate } from './format';
 
 type Range = { key: string; label: string; from: Date; to: Date };
@@ -61,6 +62,7 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
   const people = new Map<string, Agg & { designs: Map<string, number>; cities: Map<string, number>; lines: number }>();
   const cities = new Map<string, Agg>();
   const colours = new Map<string, number>();
+  const cats = new Map<string, Agg>();
   const sampleById = new Map(samples.map((s) => [s.id, s]));
 
   inR.forEach((o) => {
@@ -77,6 +79,13 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
     c.customers.add(ck);
     cities.set(city, c);
 
+    const cn = categoryName(orderCategory(o)) || 'No category';
+    const cg = cats.get(cn) || agg();
+    cg.orders++;
+    cg.pcs += Number(o.totalQuantity || 0);
+    cg.amount += Number(o.totalAmount || 0);
+    cg.customers.add(ck);
+    cats.set(cn, cg);
     const seenPeople = new Set<string>();
     getOrderLines(o).forEach((l) => {
       const s = sampleById.get(l.sampleId) || samples.find((x) => String(x.designNumber) === l.designNumber);
@@ -93,7 +102,7 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
       });
       designs.set(key, d);
 
-      const sp = norm(l.salesPerson || s?.salesPerson);
+      const sp = orderSeller(o).name; // one salesperson per order (from the shared link)
       const p = people.get(sp) || { ...agg(), designs: new Map(), cities: new Map(), lines: 0 };
       if (!seenPeople.has(sp)) {
         p.orders++;
@@ -130,6 +139,7 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
     })),
     topCities: top(cities, (v) => v.amount, 6).map(([k, v]) => ({ city: k, ...out(v) })),
     topColours: top(colours, (x) => x, 6).map(([k, q]) => `${k} ${q}pcs`),
+    categories: top(cats, (v) => v.amount, 6).map(([k, v]) => ({ category: k, ...out(v) })),
   };
 }
 
@@ -173,7 +183,8 @@ export function buildDigest(orders: Order[], samples: Sample[], now = new Date()
       pcs: o.totalQuantity,
       amount: o.totalAmount,
       designs: getOrderLines(o).map((l) => `#${l.designNumber}`).join(', '),
-      salesPerson: Array.from(new Set(getOrderLines(o).map((l) => norm(l.salesPerson)))).join(', '),
+      salesPerson: orderSeller(o).name,
+      category: categoryName(orderCategory(o)) || null,
       newCustomer: (firstSeen.get(custKey(o))?.getTime() || 0) >= todayR.from.getTime(),
     }));
 
@@ -182,7 +193,7 @@ export function buildDigest(orders: Order[], samples: Sample[], now = new Date()
   samples
     .filter((s) => !s.isTrashed)
     .forEach((s) => {
-      const k = norm(s.salesPerson);
+      const k = norm(s.createdByName || s.salesPerson);
       const u = uploads.get(k) || { total: 0, last30: 0 };
       u.total++;
       const d = tsToDate(s.createdAt);
@@ -201,7 +212,7 @@ export function buildDigest(orders: Order[], samples: Sample[], now = new Date()
     generatedAt: now.toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'short' }),
     notes: [
       'Amounts are in INR. Cancelled and trashed orders are excluded from sales figures.',
-      'A sales person is credited for a design when the design sample was uploaded under their name (their shared link brought the order).',
+      'Each order is credited to exactly one sales person: the staff member whose shared link the customer ordered from. designsUploadedBySalesPerson counts samples each person added (creator), which is separate from sales credit.',
       'customers = unique buyers by mobile number.',
     ],
     statusCounts: status,

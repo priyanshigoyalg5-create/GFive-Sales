@@ -10,7 +10,10 @@ import { useAuth } from '@/lib/auth';
 import { useOrders, useSamples } from '@/lib/hooks';
 import { useSettings } from '@/lib/settings';
 import { cldThumb, digitsOnly, formatDate, inr, tsToDate } from '@/lib/format';
-import { displayOrderId, getOrderLines, orderStatus, ORDER_STATUSES, STATUS_STYLE } from '@/lib/orders';
+import { displayOrderId, getOrderLines, orderCategory, orderSeller, orderStatus, ORDER_STATUSES, STATUS_STYLE } from '@/lib/orders';
+import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
+import { useStaffList } from '@/lib/staff';
+import type { PublicStaff } from '@/lib/types';
 import { allSamplePhotos } from '@/lib/samples';
 import type { Order, OrderStatus } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
@@ -31,7 +34,20 @@ function inRange(d: Date | null, r: Range) {
 
 export default function OrdersPage() {
   const { isSuper } = useAuth();
-  const { orders, loading, error } = useOrders();
+  const { orders: myOrders, loading, error } = useOrders(); // staff: only their own orders
+  const staffList = useStaffList(isSuper);
+  const [staffFilter, setStaffFilter] = useState(''); // '' = everyone, 'unassigned', or a uid
+  const [catFilter, setCatFilter] = useState('');
+  const orders = useMemo(
+    () =>
+      myOrders.filter((o) => {
+        if (catFilter && normCategory(orderCategory(o)) !== catFilter) return false;
+        if (!isSuper || !staffFilter) return true;
+        const s = orderSeller(o);
+        return staffFilter === 'unassigned' ? !s.uid : s.uid === staffFilter;
+      }),
+    [myOrders, catFilter, staffFilter, isSuper],
+  );
   const { samples } = useSamples();
   const settings = useSettings();
 
@@ -111,13 +127,14 @@ export default function OrdersPage() {
   };
 
   const exportCsv = () => {
-    const rows = [['Order No', 'Date', 'Status', 'Firm', 'Mobile', 'City', 'GSTIN', 'Agent', 'Design', 'Colour', 'Qty', 'Rate', 'Amount', 'Sales Person', 'Remarks']];
+    const rows = [['Order No', 'Date', 'Status', 'Sales Person', 'Category', 'Firm', 'Mobile', 'City', 'GSTIN', 'Agent', 'Design', 'Colour', 'Qty', 'Rate', 'Amount', 'Sample Added By', 'Remarks']];
     shown.forEach((o) =>
       getOrderLines(o).forEach((l) =>
         Object.entries(l.items).forEach(([c, qn]) =>
           rows.push([
-            displayOrderId(o), formatDate(tsToDate(o.createdAt)), orderStatus(o), o.firmName, o.mobile, o.city, o.gstNo || '', o.agentName || '',
-            l.designNumber, c, String(qn), String(l.price), String(qn * l.price), l.salesPerson || '', o.remarks || '',
+            displayOrderId(o), formatDate(tsToDate(o.createdAt)), orderStatus(o), orderSeller(o).name, categoryName(l.category || orderCategory(o)),
+            o.firmName, o.mobile, o.city, o.gstNo || '', o.agentName || '',
+            l.designNumber, c, String(qn), String(l.price), String(qn * l.price), o.sampleCreatorName || '', o.remarks || '',
           ]),
         ),
       ),
@@ -138,7 +155,7 @@ export default function OrdersPage() {
       <PageHeader
         eyebrow="Live"
         title="Orders"
-        subtitle="Orders from the shop arrive here instantly."
+        subtitle={isSuper ? 'All staff orders. Use the filters to see one salesperson.' : 'Only orders from the links you shared are shown here.'}
         actions={
           <button className="btn btn-outline" onClick={exportCsv} disabled={!shown.length}>
             <Download size={16} /> Export CSV
@@ -164,6 +181,27 @@ export default function OrdersPage() {
           <div className="relative flex-1">
             <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
             <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order no. (e.g. 22), firm, design, city or mobile" />
+          </div>
+          {isSuper && (
+            <div className="relative">
+              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-48" aria-label="Salesperson">
+                <option value="">All salespeople</option>
+                {staffList.map((s) => (
+                  <option key={s.uid} value={s.uid}>{s.name}</option>
+                ))}
+                <option value="unassigned">Unassigned (old orders)</option>
+              </select>
+              <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          )}
+          <div className="relative">
+            <select value={catFilter} onChange={(e) => { setCatFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-44" aria-label="Category">
+              <option value="">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
           </div>
           <div className="relative">
             <select value={range} onChange={(e) => setRange(e.target.value as Range)} className="input appearance-none pr-9 md:w-44">
@@ -255,6 +293,7 @@ export default function OrdersPage() {
               order={o}
               selected={sel.includes(o.id)}
               canDelete={isSuper}
+              staffList={isSuper ? staffList : null}
               onSelect={() => setSel((p) => (p.includes(o.id) ? p.filter((x) => x !== o.id) : [...p, o.id]))}
               onInvoice={() => setInvoice(o)}
               onPhotos={() => openGallery(o)}
@@ -272,11 +311,12 @@ export default function OrdersPage() {
 }
 
 function OrderCard({
-  order: o, selected, canDelete, onSelect, onInvoice, onPhotos,
+  order: o, selected, canDelete, staffList, onSelect, onInvoice, onPhotos,
 }: {
   order: Order;
   selected: boolean;
   canDelete: boolean;
+  staffList: PublicStaff[] | null; // Super Admin only: can correct the salesperson
   onSelect: () => void;
   onInvoice: () => void;
   onPhotos: () => void;
@@ -297,6 +337,9 @@ function OrderCard({
           <input type="checkbox" className="size-4 accent-leaf-700" checked={selected} onChange={onSelect} aria-label="Select order" />
           <span className="font-display text-xl font-semibold text-leaf-800">{displayOrderId(o)}</span>
           <span className="text-xs text-muted">{date ? formatDate(date, true) : 'Just now'}</span>
+          {categoryName(orderCategory(o)) && (
+            <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(orderCategory(o))}</span>
+          )}
         </div>
         {o.isTrashed ? (
           <div className="flex gap-2">
@@ -347,7 +390,12 @@ function OrderCard({
           <div className="mt-2 space-y-0.5 text-xs text-muted">
             {o.gstNo && <p>GSTIN: <span className="text-ink">{o.gstNo}</span></p>}
             {o.agentName && <p>Agent: <span className="text-ink">{o.agentName}</span></p>}
-            {lines.some((l) => l.salesPerson) && <p>Sales: <span className="text-ink">{Array.from(new Set(lines.map((l) => l.salesPerson).filter(Boolean))).join(', ')}</span></p>}
+            {staffList ? (
+              <SellerPicker order={o} staffList={staffList} />
+            ) : (
+              <p>Salesperson: <span className="text-ink">{orderSeller(o).name}</span></p>
+            )}
+            {o.sampleCreatorName && <p>Sample added by: <span className="text-ink">{o.sampleCreatorName}</span></p>}
           </div>
           {o.remarks && <p className="mt-2 rounded-lg bg-gold-50 px-2.5 py-1.5 text-xs text-gold-600">“{o.remarks}”</p>}
         </div>
@@ -409,5 +457,33 @@ function OrderCard({
         </div>
       </div>
     </article>
+  );
+}
+
+/** Super Admin: who gets credit for this order (fixes old/unassigned orders). */
+function SellerPicker({ order: o, staffList }: { order: Order; staffList: PublicStaff[] }) {
+  const s = orderSeller(o);
+  return (
+    <label className="flex items-center gap-1.5">
+      <span>Salesperson:</span>
+      <select
+        value={s.uid}
+        onChange={async (e) => {
+          const p = staffList.find((x) => x.uid === e.target.value);
+          if (!confirm(p ? `Credit ${displayOrderId(o)} to ${p.name}?` : `Mark ${displayOrderId(o)} as unassigned?`)) return;
+          await updateDoc(doc(db, 'orders', o.id), {
+            salesPersonUid: p?.uid || '',
+            salesPersonName: p?.name || '',
+            salesPerson: p?.name || 'N/A',
+          });
+        }}
+        className={`h-7 max-w-40 rounded-full border px-2 text-xs ${s.uid ? 'border-line bg-white text-ink' : 'border-amber-300 bg-amber-50 text-amber-800'}`}
+      >
+        <option value="">{s.uid ? 'Unassigned' : `Unassigned${s.name !== 'Unassigned' ? ` (${s.name})` : ''}`}</option>
+        {staffList.map((p) => (
+          <option key={p.uid} value={p.uid}>{p.name}</option>
+        ))}
+      </select>
+    </label>
   );
 }

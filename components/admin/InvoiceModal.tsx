@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Download, Loader2, Share2, X } from 'lucide-react';
 import type { CompanySettings, Order } from '@/lib/types';
 import { amountInWords, cldThumb, inr, tsToDate } from '@/lib/format';
-import { displayOrderId, getOrderLines, orderStatus } from '@/lib/orders';
+import { displayOrderId, getOrderLines, orderSeller, orderStatus } from '@/lib/orders';
+import { categoryName } from '@/lib/categories';
 import { downloadInvoice, shareInvoice } from '@/lib/invoice';
 
 /** On-screen preview of the sales order + a single Download (and Share on phones). */
@@ -100,7 +101,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                 <p className="mt-1"><span className="text-muted">Designs </span>{lines.length}</p>
                 <p><span className="text-muted">Total pieces </span>{totalQty} pcs</p>
                 {lines.some((l) => l.salesPerson) && (
-                  <p><span className="text-muted">Sales person </span>{Array.from(new Set(lines.map((l) => l.salesPerson).filter(Boolean))).join(', ')}</p>
+                  <p><span className="text-muted">Sales person </span>{orderSeller(order).name}</p>
                 )}
               </div>
             </div>
@@ -131,7 +132,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
                                 )}
                                 <div>
                                   <p className="font-semibold">#{l.designNumber}</p>
-                                  <p className="text-[11px] text-muted">{[l.fabric, l.work].filter(Boolean).join(' · ')}</p>
+                                  <p className="text-[11px] text-muted">{[categoryName(l.category), l.fabric, l.work].filter(Boolean).join(' · ')}</p>
                                 </div>
                               </div>
                             </td>

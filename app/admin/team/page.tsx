@@ -3,17 +3,18 @@
 import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth, signOut, updateProfile } from 'firebase/auth';
-import { Crown, Loader2, UserPlus, ShieldCheck, Mail, Ban, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Crown, Loader2, UserPlus, ShieldCheck, Mail, Ban, CheckCircle2, Eye, EyeOff, MessageCircle } from 'lucide-react';
 import { db, getSecondaryApp } from '@/lib/firebase';
 import { useAuth, authErrorMessage, SUPERADMIN_EMAILS } from '@/lib/auth';
 import type { Role, StaffProfile } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
+import { normWhatsApp, syncPublicStaff } from '@/lib/staff';
 
 export default function TeamPage() {
   const { profile, resetPassword } = useAuth();
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin' as Role });
+  const [form, setForm] = useState({ name: '', email: '', password: '', whatsapp: '', role: 'admin' as Role });
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -47,12 +48,14 @@ export default function TeamPage() {
         email: form.email.trim().toLowerCase(),
         role: form.role,
         active: true,
+        whatsappNumber: normWhatsApp(form.whatsapp),
         createdAt: serverTimestamp(),
         createdBy: profile?.email || '',
       });
+      await syncPublicStaff({ uid: cred.user.uid, name: form.name.trim(), whatsappNumber: form.whatsapp, active: true });
       await signOut(secAuth);
       setMsg({ type: 'ok', text: `${form.name} can now sign in with ${form.email.trim()}. Share the password with them privately.` });
-      setForm({ name: '', email: '', password: '', role: 'admin' });
+      setForm({ name: '', email: '', password: '', whatsapp: '', role: 'admin' });
     } catch (err) {
       setMsg({ type: 'error', text: authErrorMessage(err) });
     } finally {
@@ -83,6 +86,7 @@ export default function TeamPage() {
                       {s.role === 'superadmin' && <Crown size={14} className="text-gold-500" />}
                     </p>
                     <p className="truncate text-sm text-muted">{s.email}</p>
+                    <WhatsAppEdit staff={s} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <select
@@ -108,7 +112,11 @@ export default function TeamPage() {
                     {!me && !locked && (
                       <button
                         className={`btn btn-sm ${s.active === false ? 'btn-outline' : 'btn-outline !text-red-700'}`}
-                        onClick={() => updateDoc(doc(db, 'staff', s.uid), { active: s.active === false })}
+                        onClick={async () => {
+                          const active = s.active === false;
+                          await updateDoc(doc(db, 'staff', s.uid), { active });
+                          await syncPublicStaff({ uid: s.uid, name: s.name, whatsappNumber: s.whatsappNumber || '', active });
+                        }}
                       >
                         {s.active === false ? <><CheckCircle2 size={14} /> Enable</> : <><Ban size={14} /> Disable</>}
                       </button>
@@ -129,6 +137,10 @@ export default function TeamPage() {
           <label className="block">
             <span className="field-label">Email (used to sign in)</span>
             <input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="field-label">WhatsApp number (orders from their links go here)</span>
+            <input className="input" type="tel" inputMode="tel" placeholder="98xxxxxxxx" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
           </label>
           <label className="block">
             <span className="field-label">Temporary password</span>
@@ -162,5 +174,32 @@ export default function TeamPage() {
         </form>
       </div>
     </>
+  );
+}
+
+function WhatsAppEdit({ staff }: { staff: StaffProfile }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(staff.whatsappNumber || '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const n = normWhatsApp(val);
+    await updateDoc(doc(db, 'staff', staff.uid), { whatsappNumber: n });
+    await syncPublicStaff({ uid: staff.uid, name: staff.name, whatsappNumber: n, active: staff.active !== false });
+    setBusy(false);
+    setEditing(false);
+  };
+  if (!editing)
+    return (
+      <button onClick={() => setEditing(true)} className="mt-0.5 inline-flex items-center gap-1 text-xs text-leaf-700 hover:underline">
+        <MessageCircle size={12} /> {staff.whatsappNumber ? `+${staff.whatsappNumber}` : 'Add WhatsApp number'}
+      </button>
+    );
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      <input className="input h-8 max-w-44 text-sm" type="tel" value={val} onChange={(e) => setVal(e.target.value)} placeholder="98xxxxxxxx" autoFocus />
+      <button className="btn btn-sm btn-primary !h-8" onClick={save} disabled={busy}>Save</button>
+      <button className="btn btn-sm btn-ghost !h-8" onClick={() => setEditing(false)}>Cancel</button>
+    </div>
   );
 }

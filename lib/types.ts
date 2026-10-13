@@ -8,7 +8,16 @@ export interface StaffProfile {
   email: string;
   role: Role;
   active: boolean;
+  whatsappNumber?: string; // digits with country code; orders from this person's links open this chat
   createdAt?: Timestamp | null;
+}
+
+/** Public part of a staff profile (readable by customers' order page): publicStaff/{uid}. */
+export interface PublicStaff {
+  uid: string;
+  name: string;
+  whatsappNumber: string;
+  active: boolean;
 }
 
 export interface ColorDetail {
@@ -23,7 +32,7 @@ export interface Sample {
   price: number;
   fabric?: string;
   work?: string;
-  collection?: string; // rozana | tyohar | shudh | maharani
+  category?: string; // tyohaar | rozana | maharani | shudh (mandatory for new samples)
   description?: string;
   salesPerson?: string;
   colors?: string[];
@@ -33,7 +42,9 @@ export interface Sample {
   isTrashed?: boolean;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
-  createdBy?: string;
+  createdBy?: string; // creator e-mail (legacy)
+  createdByUid?: string; // sample owner (creator) — set automatically
+  createdByName?: string;
 }
 
 export type OrderStatus = 'Pending' | 'Dispatched' | 'Completed' | 'Cancelled';
@@ -46,6 +57,7 @@ export interface OrderLine {
   fabric?: string;
   work?: string;
   salesPerson?: string;
+  category?: string;
   image?: string;
   items: Record<string, number>;
   colorPhotos: Record<string, string>;
@@ -65,7 +77,13 @@ export interface Order {
   price?: number;
   items?: Record<string, number>;
   colorPhotos?: Record<string, string>;
-  salesPerson?: string;
+  salesPerson?: string; // display name of the salesperson credited (legacy + new)
+  // attribution (new orders)
+  salesPersonUid?: string; // staff whose shared link brought the order ('' = unassigned)
+  salesPersonName?: string;
+  sampleCreatorUid?: string; // who added the sample — kept separate from the salesperson
+  sampleCreatorName?: string;
+  category?: string;
   // customer
   firmName: string;
   mobile: string;

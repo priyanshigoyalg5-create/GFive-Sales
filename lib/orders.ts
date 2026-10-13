@@ -2,6 +2,7 @@ import { doc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Order, OrderLine, OrderStatus } from './types';
 import { inr } from './format';
+import { categoryName } from './categories';
 
 export const ORDER_STATUSES: OrderStatus[] = ['Pending', 'Dispatched', 'Completed', 'Cancelled'];
 
@@ -59,7 +60,8 @@ export function getOrderLines(o: Order): OrderLine[] {
       sampleId: o.sampleId || '',
       designNumber: String(o.designNumber || ''),
       price: Number(o.price || 0),
-      salesPerson: o.salesPerson,
+      salesPerson: o.salesPersonName || o.salesPerson,
+      category: o.category,
       image: guessedMain,
       items,
       colorPhotos: cleanColorPhotos(photos),
@@ -67,6 +69,22 @@ export function getOrderLines(o: Order): OrderLine[] {
       totalAmount: Number(o.totalAmount || totalQuantity * Number(o.price || 0)),
     },
   ];
+}
+
+/**
+ * The ONE salesperson credited for an order (used for dashboards & salary).
+ * New orders: salesPersonUid from the shared link. Old orders: name only (uid '').
+ */
+export function orderSeller(o: Order): { uid: string; name: string } {
+  const uid = o.salesPersonUid || '';
+  const raw = (o.salesPersonName || o.salesPerson || '').trim();
+  const name = raw && raw !== 'N/A' ? raw : '';
+  return { uid, name: name || (uid ? 'Staff' : 'Unassigned') };
+}
+
+/** Category of an order (first design's category). */
+export function orderCategory(o: Order): string {
+  return o.category || getOrderLines(o).find((l) => l.category)?.category || '';
 }
 
 /** Atomic counter -> "GFive#23". Same counter document as before, so numbering continues. */
@@ -96,6 +114,8 @@ export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: C
   // Same layout as the original GFive WhatsApp order message
   let t = `*-----------GFive KOLKATA-----------*\n`;
   t += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
+  const cats = Array.from(new Set(lines.map((l) => categoryName(l.category)).filter(Boolean)));
+  if (cats.length) t += `*✦ DESIGN CATEGORY: ${cats.join(', ').toUpperCase()} ✦*\n\n`;
   t += `*Order No:* ${orderNo}\n`;
   t += `*Design No:* ${lines.map((l) => l.designNumber).join(', ')}\n`;
   if (lines.length === 1) t += `*Price:* ${inr(first.price)}/pc\n`;

@@ -10,7 +10,8 @@
  */
 import type { CompanySettings, Order, OrderLine } from './types';
 import { amountInWords, tsToDate } from './format';
-import { displayOrderId, getOrderLines, orderStatus } from './orders';
+import { displayOrderId, getOrderLines, orderSeller, orderStatus } from './orders';
+import { categoryName } from './categories';
 
 type JsPDF = import('jspdf').jsPDF;
 
@@ -214,7 +215,8 @@ export async function buildInvoicePdf(order: Order, settings: CompanySettings): 
     ...(order.gstNo ? ([['GSTIN', order.gstNo]] as [string, string][]) : []),
     ...(order.agentName ? ([['Agent', order.agentName]] as [string, string][]) : []),
   ];
-  const salesPeople = Array.from(new Set(lines.map((l) => l.salesPerson).filter(Boolean))) as string[];
+  const seller = orderSeller(order);
+  const salesPeople = seller.uid || seller.name !== 'Unassigned' ? [seller.name] : [];
   const totalQty = lines.reduce((a, l) => a + l.totalQuantity, 0);
   const totalAmt = lines.reduce((a, l) => a + l.totalAmount, 0);
   const infoRows: [string, string][] = [
@@ -261,7 +263,7 @@ export async function buildInvoicePdf(order: Order, settings: CompanySettings): 
   const body: Cell[][] = [];
   lines.forEach((l: OrderLine, li) => {
     const colors = Object.entries(l.items).filter(([, q]) => q > 0);
-    const designText = [`#${l.designNumber}`, [l.fabric, l.work].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
+    const designText = [`#${l.designNumber}`, categoryName(l.category) ? categoryName(l.category).toUpperCase() : '', [l.fabric, l.work].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
     const anyColorImg = colors.some(([c]) => !!colorImgs[li][c]);
     colors.forEach(([color, qty], ci) => {
       const row: Cell[] = [];

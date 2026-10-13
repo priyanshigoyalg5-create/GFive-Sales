@@ -13,6 +13,8 @@ import { loadCustomer, saveCustomer } from '@/lib/customer';
 import { useSettings } from '@/lib/settings';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
+import { getPublicStaff } from '@/lib/staff';
+import { categoryName, normCategory } from '@/lib/categories';
 
 const EMPTY: CustomerDetails = { firmName: '', mobile: '', city: '', gstNo: '', agentName: '', remarks: '' };
 
@@ -29,7 +31,9 @@ export default function SampleOrderPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerDetails | 'qty', string>>>({});
   const [busy, setBusy] = useState(false);
   const [failMsg, setFailMsg] = useState<string | null>(null);
-  const [placed, setPlaced] = useState<{ orderNo: string; text: string; pcs: number; amount: number } | null>(null);
+  const [placed, setPlaced] = useState<{ orderNo: string; text: string; pcs: number; amount: number; to: string } | null>(null);
+  // salesperson credited for this order = whoever shared the link (?ref=), else the sample's creator
+  const [seller, setSeller] = useState<{ uid: string; name: string; whatsappNumber: string } | null>(null);
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -40,6 +44,12 @@ export default function SampleOrderPage() {
         if (!alive) return;
         if (snap.exists() && !snap.data().isTrashed) {
           const s = { id: snap.id, ...(snap.data() as Omit<Sample, 'id'>) };
+          const ref = new URLSearchParams(window.location.search).get('ref');
+          const viaLink = await getPublicStaff(ref);
+          const viaCreator = viaLink ? null : await getPublicStaff(s.createdByUid);
+          const p = viaLink || viaCreator;
+          if (!alive) return;
+          setSeller(p ? { uid: p.uid, name: p.name, whatsappNumber: p.whatsappNumber || '' } : { uid: '', name: s.salesPerson || '', whatsappNumber: '' });
           setSample(s);
           const init: Record<string, number> = {};
           sampleColors(s).forEach((col) => (init[col.name] = 0));
@@ -70,7 +80,9 @@ export default function SampleOrderPage() {
     setC((p) => ({ ...p, [k]: v }));
     if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
   };
-  const waLink = (text: string) => `https://api.whatsapp.com/send?phone=${settings.whatsappNumber}&text=${encodeURIComponent(text)}`;
+  // Orders open the WhatsApp chat of the salesperson behind the link (company number if they have none)
+  const targetNumber = seller?.whatsappNumber || settings.whatsappNumber;
+  const waLink = (text: string, to = targetNumber) => `https://api.whatsapp.com/send?phone=${to}&text=${encodeURIComponent(text)}`;
 
   const placeOrder = async () => {
     if (!sample) return;
@@ -103,7 +115,8 @@ export default function SampleOrderPage() {
         price,
         fabric: sample.fabric || '',
         work: sample.work || '',
-        salesPerson: sample.salesPerson || '',
+        salesPerson: seller?.name || '',
+        category: normCategory(sample.category),
         image: photos[0] || '',
         items,
         colorPhotos,
@@ -127,7 +140,13 @@ export default function SampleOrderPage() {
         price,
         items,
         colorPhotos,
-        salesPerson: sample.salesPerson || 'N/A',
+        salesPerson: seller?.name || 'N/A',
+        salesPersonUid: seller?.uid || '',
+        salesPersonName: seller?.name || '',
+        sampleCreatorUid: sample.createdByUid || '',
+        sampleCreatorName: sample.createdByName || sample.salesPerson || '',
+        category: normCategory(sample.category),
+        refUsed: new URLSearchParams(window.location.search).get('ref') || '',
         ...clean,
         totalQuantity: totalPcs,
         totalAmount: totalAmt,
@@ -138,25 +157,10 @@ export default function SampleOrderPage() {
       });
       saveCustomer({ ...clean, remarks: '' });
       const text = buildOrderWhatsAppText(orderNo, [line], clean, '');
-      setPlaced({ orderNo, text, pcs: totalPcs, amount: totalAmt });
+      setPlaced({ orderNo, text, pcs: totalPcs, amount: totalAmt, to: targetNumber });
       window.scrollTo({ top: 0 });
-
-      // Share with the design photo if the phone supports it, else open WhatsApp directly
-      let shared = false;
-      if (navigator.share && photos[0]) {
-        try {
-          const r = await fetch(photos[0]);
-          const b = await r.blob();
-          const file = new File([b], `Design_${sample.designNumber}.jpg`, { type: b.type || 'image/jpeg' });
-          if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({ text, files: [file] });
-            shared = true;
-          }
-        } catch {
-          /* fall back to link */
-        }
-      }
-      if (!shared) window.location.assign(waLink(text));
+      // Order is saved; now open the salesperson's WhatsApp chat with the message prefilled.
+      window.location.assign(waLink(text, targetNumber));
     } catch (err) {
       console.error(err);
       setFailMsg('Could not place the order. Please check your internet and try again.');
@@ -194,15 +198,18 @@ export default function SampleOrderPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-14 text-center animate-fade-up">
         <CheckCircle2 size={56} className="mx-auto text-leaf-600" strokeWidth={1.5} />
-        <p className="eyebrow mt-5">Order received</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold text-ink">Thank you!</h1>
+        <p className="eyebrow mt-5">Order saved</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold text-ink">Almost done!</h1>
         <p className="mt-2 text-muted">
           Order <span className="font-semibold text-ink">{placed.orderNo}</span> for design #{sample.designNumber} — {placed.pcs} pcs, {inr(placed.amount)}.
         </p>
-        <p className="mt-1 text-sm text-muted">If WhatsApp did not open, tap below to send the order to us.</p>
+        <p className="mt-3 rounded-xl bg-gold-50 px-4 py-3 text-sm text-ink ring-1 ring-gold-100">
+          Your order message is ready in WhatsApp{seller?.name ? ` (chat with ${seller.name})` : ''}. Please press <b>Send</b> in WhatsApp so we receive it.
+          If WhatsApp did not open, tap the button below.
+        </p>
         <div className="mt-6 grid gap-3">
-          <a href={waLink(placed.text)} className="btn btn-whatsapp h-12">
-            <MessageCircle size={18} /> Send order on WhatsApp
+          <a href={waLink(placed.text, placed.to)} className="btn btn-whatsapp h-12">
+            <MessageCircle size={18} /> Open WhatsApp with my order
           </a>
           <button
             className="btn btn-ghost"
@@ -279,7 +286,7 @@ export default function SampleOrderPage() {
 
         {/* ---------- Details + order */}
         <div>
-          <p className="eyebrow">Unstitched suit</p>
+          <p className="eyebrow">{categoryName(sample.category) ? `${categoryName(sample.category)} · Unstitched suit` : 'Unstitched suit'}</p>
           <div className="mt-1 flex items-start justify-between gap-4">
             <h1 className="font-display text-4xl font-semibold leading-none text-ink sm:text-5xl">#{sample.designNumber}</h1>
             <button
@@ -306,8 +313,10 @@ export default function SampleOrderPage() {
 
           <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line text-sm">
             {[
+              ['Category', categoryName(sample.category)],
               ['Fabric', sample.fabric],
               ['Work', sample.work],
+              ['Rate', `${inr(price)} / pc`],
             ].map(([k, v]) => (
               <div key={k} className="bg-ivory px-4 py-3">
                 <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">{k}</dt>
@@ -316,9 +325,9 @@ export default function SampleOrderPage() {
             ))}
           </dl>
           {sample.description && <p className="mt-4 text-[15px] leading-relaxed text-ink/80">{sample.description}</p>}
-          {sample.salesPerson && (
+          {seller?.name && (
             <p className="mt-3 text-sm text-muted">
-              Sales person: <span className="font-medium text-ink">{sample.salesPerson}</span>
+              Sales person: <span className="font-medium text-ink">{seller.name}</span>
             </p>
           )}
 
