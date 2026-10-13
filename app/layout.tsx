@@ -1,20 +1,35 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import '@fontsource/cormorant-garamond/500.css';
+import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/cormorant-garamond/600-italic.css';
+import '@fontsource/cormorant-garamond/700.css';
+import '@fontsource/jost/400.css';
+import '@fontsource/jost/500.css';
+import '@fontsource/jost/600.css';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'GFive Sales Studio',
-  description: 'Unstitched Suit Ordering App',
+  title: {
+    default: 'GFive — Glamour Grace Unlimited',
+    template: '%s · GFive',
+  },
+  description: 'GFive Kolkata — designer unstitched suits. Browse samples, pick colours and place your order on WhatsApp.',
+  icons: {
+    icon: '/brand/icon-192.png',
+    apple: '/brand/icon-192.png',
+  },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const viewport: Viewport = {
+  themeColor: '#1a3512',
+  width: 'device-width',
+  initialScale: 1,
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, padding: 0, boxSizing: 'border-box' }}>
-        {children}
-      </body>
+      <body className="min-h-screen bg-cream text-ink antialiased">{children}</body>
     </html>
   );
 }

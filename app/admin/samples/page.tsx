@@ -1,470 +1,235 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { useAuth } from '@/lib/auth';
+import { useOrders, useSamples } from '@/lib/hooks';
+import { cldThumb, inr } from '@/lib/format';
+import { getOrderLines } from '@/lib/orders';
+import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
+import PageHeader from '@/components/admin/PageHeader';
 
-export default function AllSamplesPage() {
-  const [samples, setSamples] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'Active' | 'Trash'>('Active');
-  const [selectedSampleIds, setSelectedSampleIds] = useState<string[]>([]);
+export default function AdminSamplesPage() {
+  const { isSuper } = useAuth();
+  const { samples, loading } = useSamples();
+  const { orders } = useOrders();
+  const [tab, setTab] = useState<'active' | 'trash'>('active');
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<string[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    const q = query(collection(db, 'samples'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setSamples(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching samples: ", error);
-      setLoading(false);
-    });
+  const pcsByDesign = useMemo(() => {
+    const m = new Map<string, number>();
+    orders
+      .filter((o) => !o.isTrashed && o.status !== 'Cancelled')
+      .forEach((o) => getOrderLines(o).forEach((l) => l.sampleId && m.set(l.sampleId, (m.get(l.sampleId) || 0) + l.totalQuantity)));
+    return m;
+  }, [orders]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const handleMoveToTrash = async (sampleId: string) => {
-    try {
-      const docRef = doc(db, 'samples', sampleId);
-      await updateDoc(docRef, { isTrashed: true });
-    } catch (err) {
-      console.error('Failed to move to trash:', err);
-      alert('Failed to move sample to trash.');
-    }
-  };
-
-  const handleRestoreFromTrash = async (sampleId: string) => {
-    try {
-      const docRef = doc(db, 'samples', sampleId);
-      await updateDoc(docRef, { isTrashed: false });
-    } catch (err) {
-      console.error('Failed to restore sample:', err);
-      alert('Failed to restore sample.');
-    }
-  };
-
-  const handlePermanentDelete = async (sampleId: string, designNo: string) => {
-    if (confirm(`⚠️ Permanently delete Design #${designNo}? This cannot be undone.`)) {
-      try {
-        await deleteDoc(doc(db, 'samples', sampleId));
-      } catch (err) {
-        console.error('Failed to permanently delete sample:', err);
-        alert('Failed to delete sample.');
-      }
-    }
-  };
-
-  const toggleSelectSample = (id: string) => {
-    setSelectedSampleIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = (filteredIds: string[]) => {
-    const allSelected = filteredIds.every((id) => selectedSampleIds.includes(id));
-    if (allSelected) {
-      setSelectedSampleIds([]);
-    } else {
-      setSelectedSampleIds(filteredIds);
-    }
-  };
-
-  const handleBulkMoveToTrash = async () => {
-    if (selectedSampleIds.length === 0) return;
-    if (confirm(`Move ${selectedSampleIds.length} selected sample(s) to Trash?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedSampleIds.forEach((id) => {
-          const docRef = doc(db, 'samples', id);
-          batch.update(docRef, { isTrashed: true });
-        });
-        await batch.commit();
-        setSelectedSampleIds([]);
-      } catch (err) {
-        console.error('Bulk trash failed:', err);
-      }
-    }
-  };
-
-  const handleBulkRestore = async () => {
-    if (selectedSampleIds.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      selectedSampleIds.forEach((id) => {
-        const docRef = doc(db, 'samples', id);
-        batch.update(docRef, { isTrashed: false });
-      });
-      await batch.commit();
-      setSelectedSampleIds([]);
-    } catch (err) {
-      console.error('Bulk restore failed:', err);
-    }
-  };
-
-  const handleBulkPermanentDelete = async () => {
-    if (selectedSampleIds.length === 0) return;
-    if (confirm(`⚠️ Permanently delete ${selectedSampleIds.length} selected sample(s)?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedSampleIds.forEach((id) => {
-          const docRef = doc(db, 'samples', id);
-          batch.delete(docRef);
-        });
-        await batch.commit();
-        setSelectedSampleIds([]);
-      } catch (err) {
-        console.error('Bulk delete failed:', err);
-      }
-    }
-  };
-
-  const filteredSamples = samples.filter((s) => {
-    const isTrashed = !!s.isTrashed;
-    if (statusFilter === 'Trash' && !isTrashed) return false;
-    if (statusFilter === 'Active' && isTrashed) return false;
-
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      String(s.designNumber || '').toLowerCase().includes(q) ||
-      String(s.fabric || '').toLowerCase().includes(q) ||
-      String(s.work || '').toLowerCase().includes(q)
-    );
-  });
-
-  const filteredSampleIds = filteredSamples.map((s) => s.id);
-  const isAllFilteredSelected = filteredSampleIds.length > 0 && filteredSampleIds.every((id) => selectedSampleIds.includes(id));
-  const trashCount = samples.filter((s) => !!s.isTrashed).length;
   const activeCount = samples.filter((s) => !s.isTrashed).length;
+  const trashCount = samples.length - activeCount;
+  const shown = samples.filter((s) => {
+    if ((tab === 'trash') !== !!s.isTrashed) return false;
+    const t = q.trim().toLowerCase();
+    return !t || [s.designNumber, s.fabric, s.work, s.salesPerson].some((v) => String(v || '').toLowerCase().includes(t));
+  });
+  const allSel = shown.length > 0 && shown.every((s) => sel.includes(s.id));
 
-  if (loading) {
-    return <div style={{ padding: '60px', textAlign: 'center', color: '#0f172a', fontWeight: 'bold' }}>Loading All Uploaded Samples...</div>;
-  }
+  const setTrash = async (ids: string[], value: boolean) => {
+    const b = writeBatch(db);
+    ids.forEach((id) => b.update(doc(db, 'samples', id), { isTrashed: value }));
+    await b.commit();
+    setSel([]);
+  };
+  const destroy = async (ids: string[]) => {
+    if (!confirm(`Permanently delete ${ids.length} sample(s)? This cannot be undone.`)) return;
+    const b = writeBatch(db);
+    ids.forEach((id) => b.delete(doc(db, 'samples', id)));
+    await b.commit();
+    setSel([]);
+  };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f8fafc',
-      padding: '24px 16px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-        
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              🛍️ All Uploaded Fabric Samples
-            </h1>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
-              Shopping style catalog of all design samples created by Admin ({activeCount} active items)
-            </p>
-          </div>
-
-          <a 
-            href="/admin/add" 
-            style={{
-              background: '#2563eb',
-              color: '#ffffff',
-              padding: '10px 18px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '14px',
-              textDecoration: 'none',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-            }}
-          >
-            ➕ Add New Sample
-          </a>
-        </div>
-
-        {/* Search & Status Filters */}
-        <div style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ flex: '1 1 300px' }}>
-            <input
-              type="text"
-              placeholder="Search by Design No, Fabric or Work..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 18px',
-                borderRadius: '14px',
-                border: '2px solid #cbd5e1',
-                fontSize: '14px',
-                fontWeight: '600',
-                background: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
+    <>
+      <PageHeader
+        eyebrow="Catalogue"
+        title="Samples"
+        subtitle={`${activeCount} designs live in the shop`}
+        actions={
+          <>
             <button
-              onClick={() => { setStatusFilter('Active'); setSelectedSampleIds([]); }}
-              style={{
-                padding: '10px 16px',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: statusFilter === 'Active' ? '#0f172a' : '#f1f5f9',
-                color: statusFilter === 'Active' ? '#ffffff' : '#475569'
+              className="btn btn-outline"
+              onClick={async () => {
+                const text = `*GFive Kolkata — New Collection*\nView all designs & order online:\n${window.location.origin}/`;
+                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
               }}
             >
-              📂 Active ({activeCount})
+              <MessageCircle size={16} /> Share shop
             </button>
-            <button
-              onClick={() => { setStatusFilter('Trash'); setSelectedSampleIds([]); }}
-              style={{
-                padding: '10px 16px',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: statusFilter === 'Trash' ? '#dc2626' : '#f1f5f9',
-                color: statusFilter === 'Trash' ? '#ffffff' : '#dc2626'
-              }}
-            >
-              🗑️ Trash ({trashCount})
-            </button>
-          </div>
+            <Link href="/admin/samples/new" className="btn btn-primary">
+              <PlusCircle size={16} /> Add sample
+            </Link>
+          </>
+        }
+      />
+
+      <div className="card mb-5 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+          <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search design no., fabric, work, sales person" />
         </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setTab('active'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'active' ? 'chip-active' : ''}`}>
+            Live ({activeCount})
+          </button>
+          <button onClick={() => { setTab('trash'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'trash' ? '!border-red-700 !bg-red-700 !text-white' : ''}`}>
+            <Trash2 size={14} /> Trash ({trashCount})
+          </button>
+        </div>
+      </div>
 
-        {/* Bulk Selection Bar */}
-        {filteredSamples.length > 0 && (
-          <div style={{ background: '#ffffff', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-              <input
-                type="checkbox"
-                checked={isAllFilteredSelected}
-                onChange={() => handleSelectAll(filteredSampleIds)}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563eb' }}
-              />
-              Select All Shown ({filteredSamples.length})
-            </label>
-
-            {selectedSampleIds.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#2563eb', background: '#dbeafe', padding: '4px 10px', borderRadius: '6px' }}>
-                  {selectedSampleIds.length} Selected
-                </span>
-
-                {statusFilter === 'Trash' ? (
-                  <>
-                    <button onClick={handleBulkRestore} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      🔄 Restore Selected
-                    </button>
-                    <button onClick={handleBulkPermanentDelete} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      💥 Delete Permanently
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={handleBulkMoveToTrash} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                    🗑️ Move Selected to Trash
+      {shown.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : shown.map((s) => s.id))} />
+            Select all ({shown.length})
+          </label>
+          {sel.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-leaf-800">{sel.length} selected</span>
+              {tab === 'active' ? (
+                <button className="btn btn-sm btn-outline !text-red-700" onClick={() => setTrash(sel, true)}>
+                  <Trash2 size={14} /> Move to trash
+                </button>
+              ) : (
+                <>
+                  <button className="btn btn-sm btn-outline" onClick={() => setTrash(sel, false)}>
+                    <RotateCcw size={14} /> Restore
                   </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  {isSuper && (
+                    <button className="btn btn-sm btn-danger" onClick={() => destroy(sel)}>
+                      Delete forever
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Shopping Catalog Grid */}
-        {filteredSamples.length === 0 ? (
-          <div style={{ background: '#ffffff', padding: '40px', borderRadius: '20px', textAlign: 'center', color: '#64748b', border: '1px solid #e2e8f0' }}>
-            No samples found matching your search.
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: '20px'
-          }}>
-            {filteredSamples.map((sample) => {
-              const allPhotos = sample.sampleImages && sample.sampleImages.length > 0 ? sample.sampleImages : [sample.imageUrl];
-              const isSelected = selectedSampleIds.includes(sample.id);
-              const isTrashed = !!sample.isTrashed;
-
-              return (
-                <div 
-                  key={sample.id}
-                  style={{
-                    background: isSelected ? '#eff6ff' : '#ffffff',
-                    borderRadius: '20px',
-                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                    overflow: 'hidden',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    opacity: isTrashed ? 0.75 : 1,
-                    position: 'relative'
-                  }}
-                >
-                  <div>
-                    {/* Main Image with Checkbox */}
-                    <div style={{ position: 'relative', width: '100%', height: '260px', background: '#f1f5f9' }}>
-                      <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 10 }}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectSample(sample.id)}
-                          style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#2563eb' }}
-                        />
-                      </div>
-
-                      <img 
-                        src={sample.imageUrl} 
-                        alt={sample.designNumber} 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                      <span style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        background: '#15803d',
-                        color: '#ffffff',
-                        padding: '4px 10px',
-                        borderRadius: '10px',
-                        fontSize: '13px',
-                        fontWeight: '800'
-                      }}>
-                        ₹{sample.price} / pc
-                      </span>
-
-                      {allPhotos.length > 1 && (
-                        <span style={{
-                          position: 'absolute',
-                          bottom: '12px',
-                          left: '12px',
-                          background: 'rgba(15, 23, 42, 0.8)',
-                          color: '#ffffff',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          📷 {allPhotos.length} Photos
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div style={{ padding: '16px' }}>
-                      <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 8px 0', color: '#0f172a' }}>
-                        Design #{sample.designNumber}
-                      </h2>
-
-                      <div style={{ fontSize: '13px', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {sample.fabric && <div><strong>Fabric:</strong> {sample.fabric}</div>}
-                        {sample.work && <div><strong>Work:</strong> {sample.work}</div>}
-                        {sample.remarks && <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '12px' }}>{sample.remarks}</div>}
-                      </div>
-
-                      {/* Colours */}
-                      {sample.colors && sample.colors.length > 0 && (
-                        <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {sample.colors.map((col: string) => (
-                            <span key={col} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#0f172a', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>
-                              {col}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+      {loading ? (
+        <div className="grid place-items-center py-24"><Loader2 className="animate-spin text-leaf-700" /></div>
+      ) : shown.length === 0 ? (
+        <div className="card p-12 text-center">
+          <p className="font-display text-2xl">{tab === 'trash' ? 'Trash is empty' : q ? 'No matching samples' : 'No samples yet'}</p>
+          {tab === 'active' && !q && (
+            <Link href="/admin/samples/new" className="btn btn-primary mt-4"><PlusCircle size={16} /> Add your first sample</Link>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          {shown.map((s) => {
+            const photos = samplePhotos(s);
+            const colors = sampleColors(s);
+            const on = sel.includes(s.id);
+            const ordered = pcsByDesign.get(s.id) || 0;
+            return (
+              <article key={s.id} className={`card flex flex-col overflow-hidden transition ${on ? 'ring-2 ring-leaf-600' : ''} ${s.isTrashed ? 'opacity-80' : ''}`}>
+                <div className="relative aspect-[4/5] bg-sand">
+                  {photos[0] && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={cldThumb(photos[0], 500, 625)} alt="" loading="lazy" className="size-full object-cover" />
+                  )}
+                  <label className="absolute left-2 top-2 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow">
+                    <input type="checkbox" className="size-4 accent-leaf-700" checked={on} onChange={() => setSel((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))} />
+                  </label>
+                  <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
+                  <div className="absolute inset-x-2 bottom-2 flex justify-between text-[11px]">
+                    {photos.length > 1 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>
+                    ) : <span />}
+                    {ordered > 0 && <span className="rounded-full bg-gold-500 px-2 py-0.5 font-medium text-white">{ordered} pcs ordered</span>}
                   </div>
+                </div>
+                <div className="flex flex-1 flex-col p-3">
+                  <h3 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h3>
+                  <p className="line-clamp-1 text-xs text-muted">{[s.fabric, s.work].filter(Boolean).join(' · ') || '—'}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {colors.slice(0, 4).map((c) => (
+                      <span key={c.name} className="rounded-full bg-sand px-2 py-0.5 text-[11px]">{c.name}</span>
+                    ))}
+                    {colors.length > 4 && <span className="rounded-full bg-sand px-2 py-0.5 text-[11px]">+{colors.length - 4}</span>}
+                  </div>
+                  {s.salesPerson && <p className="mt-2 text-[11px] text-muted">By {s.salesPerson}</p>}
 
-                  {/* Actions */}
-                  <div style={{ padding: '16px', paddingTop: 0, display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {isTrashed ? (
-                      <>
-                        <button 
-                          onClick={() => handleRestoreFromTrash(sample.id)}
-                          style={{ flex: 1, background: '#16a34a', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        >
-                          🔄 Restore
+                  <div className="mt-auto pt-3">
+                    {s.isTrashed ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button className="btn btn-sm btn-outline" onClick={() => updateDoc(doc(db, 'samples', s.id), { isTrashed: false })}>
+                          <RotateCcw size={14} /> Restore
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePermanentDelete(sample.id, sample.designNumber)}
-                          style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        >
-                          💥 Delete
-                        </button>
-                      </>
+                        {isSuper ? (
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() => confirm(`Delete #${s.designNumber} forever?`) && deleteDoc(doc(db, 'samples', s.id))}
+                          >
+                            Delete
+                          </button>
+                        ) : <span />}
+                      </div>
                     ) : (
                       <>
-                        <a 
-                          href={`/s/${sample.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            flex: 1,
-                            background: '#0f172a',
-                            color: '#ffffff',
-                            padding: '10px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            textDecoration: 'none',
-                            textAlign: 'center'
-                          }}
-                        >
-                          🔗 Link
-                        </a>
-
-                        <a 
-                          href={`/admin/add?edit=${sample.id}`}
-                          style={{
-                            background: '#e0e7ff',
-                            color: '#3730a3',
-                            border: '1px solid #c7d2fe',
-                            padding: '10px 12px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            textDecoration: 'none',
-                            textAlign: 'center'
-                          }}
-                        >
-                          ✏️ Edit
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => handleMoveToTrash(sample.id)}
-                          style={{
-                            background: '#fee2e2',
-                            color: '#dc2626',
-                            border: '1px solid #fca5a5',
-                            padding: '10px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🗑️
+                        <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s)}>
+                          <MessageCircle size={14} /> Share
                         </button>
+                        <div className="mt-2 grid grid-cols-4 gap-1.5">
+                          <IconBtn
+                            label={copied === s.id ? 'Copied' : 'Copy link'}
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(sampleLink(s.id));
+                              setCopied(s.id);
+                              setTimeout(() => setCopied(null), 1500);
+                            }}
+                          >
+                            {copied === s.id ? <Check size={15} /> : <Link2 size={15} />}
+                          </IconBtn>
+                          <a href={`/s/${s.id}`} target="_blank" className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Open in shop">
+                            <ExternalLink size={15} />
+                          </a>
+                          <Link href={`/admin/samples/${s.id}/edit`} className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Edit">
+                            <Pencil size={15} />
+                          </Link>
+                          <IconBtn label="Move to trash" danger onClick={() => updateDoc(doc(db, 'samples', s.id), { isTrashed: true })}>
+                            <Trash2 size={15} />
+                          </IconBtn>
+                        </div>
                       </>
                     )}
                   </div>
-
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
 
-      </div>
-    </div>
+function IconBtn({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`grid h-9 place-items-center rounded-full border border-line ${danger ? 'text-red-700 hover:bg-red-50' : 'text-leaf-800 hover:bg-leaf-50'}`}
+    >
+      {children}
+    </button>
   );
 }
