@@ -69,7 +69,7 @@ export default function LoginPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="mx-auto h-16 w-auto lg:hidden" />
           <h2 className="mt-6 font-display text-4xl font-semibold text-ink lg:mt-0">Welcome back</h2>
-          <p className="mt-1 text-sm text-muted">Sign in with your Admin or Super Admin account.</p>
+          <p className="mt-1 text-sm text-muted">Sign in with your Admin, Sub Admin or Super Admin account.</p>
 
           {state.status === 'no-access' && (
             <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
