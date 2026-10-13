@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { verifyStaff } from '@/lib/verify-staff';
+import { hasPermission } from '@/lib/permissions';
 
 export const maxDuration = 60;
 
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || null;
   const staff = await verifyStaff(token).catch(() => null);
   if (!staff) return Response.json({ error: 'Please sign in again.' }, { status: 401 });
+  if (!hasPermission(staff.role as never, staff.permissions, 'askAI')) return Response.json({ error: 'Ask AI is not enabled for your account.' }, { status: 403 });
 
   let body: { messages?: Msg[]; digest?: unknown };
   try {

@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { useSamples } from '@/lib/hooks';
+import { useStaffList } from '@/lib/staff';
 import { uploadImage } from '@/lib/upload';
 import { cldThumb } from '@/lib/format';
 import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
@@ -35,7 +36,10 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 export default function SampleForm({ initial }: { initial?: Sample }) {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, can } = useAuth();
+  const forOthers = !initial && can('addForOthers'); // Sub Admin / Super Admin may add in another Admin's name
+  const team = useStaffList(forOthers);
+  const [ownerUid, setOwnerUid] = useState(''); // '' = me
   const { samples } = useSamples();
   const editing = !!initial;
 
@@ -194,6 +198,8 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         updatedAt: serverTimestamp(),
       };
 
+      const picked = ownerUid ? team.find((t) => t.uid === ownerUid) : null;
+      const owner = picked && forOthers ? { uid: picked.uid, name: picked.name } : { uid: profile!.uid, name: profile!.name };
       let id = initial?.id;
       if (editing && id) {
         await updateDoc(doc(db, 'samples', id), payload);
@@ -201,16 +207,19 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         // owner = the logged-in staff member (set automatically, never typed)
         const ref = await addDoc(collection(db, 'samples'), {
           ...payload,
-          salesPerson: profile!.name, // legacy display field
-          createdByUid: profile!.uid,
-          createdByName: profile!.name,
-          createdBy: profile!.email || '',
+          salesPerson: owner.name, // legacy display field
+          createdByUid: owner.uid,
+          createdByName: owner.name,
+          createdBy: owner.uid === profile!.uid ? profile!.email || '' : '',
+          // who actually uploaded it (differs when added on behalf of a busy / unwell Admin)
+          addedByUid: profile!.uid,
+          addedByName: profile!.name,
           isTrashed: false,
           createdAt: serverTimestamp(),
         });
         id = ref.id;
       }
-      setSaved({ ...(initial || {}), ...payload, id: id!, createdAt: null, updatedAt: null } as Sample);
+      setSaved({ ...(initial || { createdByUid: owner.uid, createdByName: owner.name }), ...payload, id: id!, createdAt: null, updatedAt: null } as Sample);
     } catch (err) {
       console.error(err);
       setErrors({ form: (err as Error).message || 'Could not save. Please try again.' });
@@ -297,6 +306,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         {errors.photos && <p className="mt-2 text-sm text-red-700">{errors.photos}</p>}
         <p className="mt-3 text-xs text-muted">Tip: select several photos at once. Big phone photos are compressed automatically before upload.</p>
 
+        {can('aiMedia') && (
         <div className="mt-4 rounded-2xl border border-gold-500/40 bg-gold-50/60 p-4">
           <p className="flex items-center gap-2 font-medium text-ink"><Sparkles size={16} className="text-gold-600" /> AI model photo &amp; video</p>
           <p className="mt-1 text-xs text-muted">Turn the original suit photo into a photo and a short video of a model wearing it. Marked “AI generated” everywhere.</p>
@@ -313,6 +323,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             </figure>
           )}
         </div>
+        )}
       </section>
       {view !== null && photos[view] && (
         <Lightbox
@@ -389,10 +400,24 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             <span className="field-label">Description (optional)</span>
             <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Dupatta, bottom, any extra details shown to customers" />
           </label>
-          <p className="rounded-xl bg-sand/60 px-3.5 py-2.5 text-sm text-muted">
-            Added by <span className="font-medium text-ink">{editing ? initial?.createdByName || initial?.salesPerson || '—' : profile?.name}</span>
-            {!editing && ' (set automatically)'}
-          </p>
+          {forOthers ? (
+            <label className="block">
+              <span className="field-label">Sample for (whose name it goes in)</span>
+              <select className="input appearance-none" value={ownerUid} onChange={(e) => setOwnerUid(e.target.value)} aria-label="Sample for">
+                <option value="">Me ({profile?.name})</option>
+                {team.filter((t) => t.uid !== profile?.uid && t.active !== false).map((t) => (
+                  <option key={t.uid} value={t.uid}>{t.name}</option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-muted">Use this when an Admin is busy or unwell. The sample is shown as theirs and their share link gets the orders.</span>
+            </label>
+          ) : (
+            <p className="rounded-xl bg-sand/60 px-3.5 py-2.5 text-sm text-muted">
+              Added by <span className="font-medium text-ink">{editing ? initial?.createdByName || initial?.salesPerson || '—' : profile?.name}</span>
+              {!editing && ' (set automatically)'}
+              {editing && initial?.addedByName && initial.addedByUid !== initial.createdByUid && <> · uploaded by {initial.addedByName}</>}
+            </p>
+          )}
         </section>
 
         <section className="card p-5">
@@ -460,11 +485,14 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             <CheckCircle2 className="mx-auto text-leaf-600" size={48} strokeWidth={1.5} />
             <h3 className="mt-3 font-display text-3xl font-semibold">{editing ? 'Changes saved' : 'Sample created'}</h3>
             <p className="mt-1 text-sm text-muted">Design #{saved.designNumber} is ready — share the link with customers.</p>
+            {!editing && saved.createdByUid && saved.createdByUid !== profile?.uid && (
+              <p className="mt-2 rounded-lg bg-gold-50 px-3 py-2 text-sm text-gold-600">Added in {saved.createdByName}’s name — orders from this link go to {saved.createdByName}.</p>
+            )}
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-sand/70 px-3 py-2 text-left text-xs text-ink">
-              <span className="flex-1 truncate">{sampleLink(saved.id, profile?.uid)}</span>
+              <span className="flex-1 truncate">{sampleLink(saved.id, editing ? profile?.uid : saved.createdByUid || profile?.uid)}</span>
             </div>
             <div className="mt-4 grid gap-2.5">
-              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved, profile?.uid, profile?.name)}>
+              <button type="button" className="btn btn-whatsapp h-12" onClick={() => shareSampleOnWhatsApp(saved, editing ? profile?.uid : saved.createdByUid || profile?.uid, editing ? profile?.name : saved.createdByName || profile?.name)}>
                 <MessageCircle size={18} /> Share on WhatsApp
               </button>
               <div className="grid grid-cols-2 gap-2.5">
@@ -472,14 +500,14 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
                   type="button"
                   className="btn btn-outline"
                   onClick={async () => {
-                    await navigator.clipboard.writeText(sampleLink(saved.id, profile?.uid));
+                    await navigator.clipboard.writeText(sampleLink(saved.id, editing ? profile?.uid : saved.createdByUid || profile?.uid));
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1800);
                   }}
                 >
                   <Copy size={15} /> {copied ? 'Copied!' : 'Copy link'}
                 </button>
-                <a href={sampleLink(saved.id, profile?.uid)} target="_blank" className="btn btn-outline">
+                <a href={sampleLink(saved.id, editing ? profile?.uid : saved.createdByUid || profile?.uid)} target="_blank" className="btn btn-outline">
                   <ExternalLink size={15} /> Open
                 </a>
               </div>

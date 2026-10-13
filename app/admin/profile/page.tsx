@@ -6,6 +6,7 @@ import { Loader2, Save, MessageCircle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { normWhatsApp, syncPublicStaff } from '@/lib/staff';
+import { ROLE_LABEL } from '@/lib/permissions';
 import PageHeader from '@/components/admin/PageHeader';
 
 export default function ProfilePage() {
@@ -46,7 +47,7 @@ export default function ProfilePage() {
           </label>
           <div>
             <p className="field-label">Role</p>
-            <p className="font-medium">{profile.role === 'superadmin' ? 'Super Admin' : 'Admin'}</p>
+            <p className="font-medium">{ROLE_LABEL[profile.role] || 'Admin'}</p>
           </div>
           <div className="col-span-2">
             <p className="field-label">Email</p>

@@ -7,13 +7,14 @@ rules_version = '2';
 // IMPORTANT: put the Super Admin e-mail(s) in superEmails() below — the same
 // e-mails you set in NEXT_PUBLIC_SUPERADMIN_EMAILS on Vercel.
 //
-// Access summary
-//  • Customers (not signed in): read one design, read the sharing salesperson's
-//    public name/WhatsApp, create an order. Nothing else.
-//  • Admin (staff): shared sample catalogue (edit only own samples); read/update
-//    ONLY orders credited to them (salesPersonUid == their uid) and only the
-//    status / trash fields; their own staff profile.
-//  • Super Admin: everything.
+// Roles (staff/{uid}.role)
+//  • admin      = Sales Person: shared sample catalogue (edit only own samples),
+//                 ONLY orders credited to them (status / trash only), own profile.
+//  • subadmin   = admin + exactly the powers the Super Admin ticked in
+//                 staff/{uid}.permissions (see lib/permissions.ts for the keys).
+//  • superadmin = everything.
+//  Customers (not signed in): read one design, the sharing Sales Person's public
+//  name/WhatsApp, and create an order. Nothing else.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -24,15 +25,22 @@ service cloud.firestore {
 
     function signedIn() { return request.auth != null; }
     function staffPath() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function me() { return get(staffPath()).data; }
     function isStaff() {
-      return signedIn() && exists(staffPath()) && get(staffPath()).data.active != false;
+      return signedIn() && exists(staffPath()) && me().get('active', true) != false;
     }
     function isBootstrapSuper() {
       return signedIn() && request.auth.token.email != null
         && request.auth.token.email.lower() in superEmails();
     }
     function isSuper() {
-      return isBootstrapSuper() || (isStaff() && get(staffPath()).data.role == 'superadmin');
+      return isBootstrapSuper() || (isStaff() && me().get('role', 'admin') == 'superadmin');
+    }
+    function isAdmin() { return isStaff() && me().get('role', 'admin') == 'admin'; }
+    function isSub() { return isStaff() && me().get('role', 'admin') == 'subadmin'; }
+    // a power ticked by the Super Admin for this Sub Admin (Super Admin has all)
+    function can(p) {
+      return isSuper() || (isSub() && me().get('permissions', {}).get(p, false) == true);
     }
     function onlyChanges(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -44,27 +52,33 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/publicStaff/$(uid))
         && get(/databases/$(database)/documents/publicStaff/$(uid)).data.active != false;
     }
+    function staffRole(uid) {
+      return get(/databases/$(database)/documents/staff/$(uid)).data.get('role', 'admin');
+    }
 
     // ---------------------------------------------------------------- samples
     // Shared catalogue: anyone can view a design (customer links).
-    // Staff add samples as themselves; only the owner or Super Admin can change them.
     match /samples/{id} {
       allow read: if true;
-      allow create: if isStaff()
-                    && request.resource.data.createdByUid == request.auth.uid
-                    && validCategory(request.resource.data.category);
-      allow update: if isSuper()
+      // Admins add as themselves. A Sub Admin with "Add samples for another Admin"
+      // may put a sample in another active team member's name.
+      allow create: if (isAdmin() || can('addSamples'))
+                    && validCategory(request.resource.data.category)
+                    && request.resource.data.get('addedByUid', request.auth.uid) == request.auth.uid
+                    && (request.resource.data.createdByUid == request.auth.uid
+                        || (can('addForOthers') && activePublicStaff(request.resource.data.createdByUid)));
+      allow update: if can('editAllSamples')
                     || (isStaff()
                         && resource.data.createdByUid == request.auth.uid
                         && request.resource.data.createdByUid == resource.data.createdByUid
                         && request.resource.data.get('createdByName', '') == resource.data.get('createdByName', ''));
-      allow delete: if isSuper();
+      allow delete: if can('deleteSamples');
     }
 
     // ---------------------------------------------------------------- orders
     match /orders/{id} {
-      // Customers create orders from a design link. The salesperson must be a real,
-      // active staff member (or empty for links without a salesperson).
+      // Customers create orders from a design link. The Sales Person must be a real,
+      // active team member (or empty for links without a Sales Person).
       allow create: if request.resource.data.totalQuantity is number
                     && request.resource.data.totalQuantity > 0
                     && request.resource.data.firmName is string
@@ -74,17 +88,21 @@ service cloud.firestore {
                     && (request.resource.data.get('salesPersonUid', '') == ''
                         || activePublicStaff(request.resource.data.salesPersonUid));
 
-      // Staff see ONLY their own orders. Super Admin sees all.
-      allow read: if isSuper()
+      // Admins see ONLY their own orders. Super Admin, and Sub Admins with the power, see all.
+      allow read: if can('viewAllOrders')
                   || (isStaff() && resource.data.get('salesPersonUid', '') == request.auth.uid);
 
-      // Staff may only move their own orders between statuses / trash —
-      // never change amounts, customer or who gets the credit.
+      // Status / trash: own orders, or everyone's with "Change status of all orders".
+      // Credit (Sales Person) only with "Change Sales Person credit". Amounts never.
       allow update: if isSuper()
                     || (isStaff()
                         && resource.data.get('salesPersonUid', '') == request.auth.uid
-                        && onlyChanges(['status', 'isTrashed']));
-      allow delete: if isSuper();
+                        && onlyChanges(['status', 'isTrashed']))
+                    || (can('viewAllOrders') && can('manageAllOrders') && onlyChanges(['status', 'isTrashed']))
+                    || (can('viewAllOrders') && can('reassignOrders')
+                        && onlyChanges(['salesPersonUid', 'salesPersonName', 'salesPerson'])
+                        && (request.resource.data.salesPersonUid == '' || activePublicStaff(request.resource.data.salesPersonUid)));
+      allow delete: if can('viewAllOrders') && can('deleteOrders');
     }
 
     // Order number counter: may only ever go up by exactly one.
@@ -98,22 +116,30 @@ service cloud.firestore {
     // Company details shown on customer page & invoices.
     match /settings/{id} {
       allow read: if true;
-      allow write: if isSuper();
+      allow write: if can('settings');
     }
 
     // ---------------------------------------------------------------- staff
-    // Private staff accounts & roles.
+    // Private team accounts, roles and powers.
     match /staff/{uid} {
-      allow read: if isSuper() || (signedIn() && request.auth.uid == uid);
+      allow read: if isSuper() || can('manageTeam') || (signedIn() && request.auth.uid == uid);
+      // Super Admin creates any role. A Sub Admin with "Add / disable Admins" creates Admins only.
       allow create: if isSuper()
-                    || (isBootstrapSuper() && request.auth.uid == uid && request.resource.data.role == 'superadmin');
-      // staff can only change their own name and WhatsApp number
+                    || (isBootstrapSuper() && request.auth.uid == uid && request.resource.data.role == 'superadmin')
+                    || (can('manageTeam')
+                        && request.resource.data.role == 'admin'
+                        && !('permissions' in request.resource.data));
       allow update: if isSuper()
-                    || (isStaff() && request.auth.uid == uid && onlyChanges(['whatsappNumber', 'name', 'nameConfirmed']));
+                    // own name & WhatsApp only — never own role or powers
+                    || (isStaff() && request.auth.uid == uid && onlyChanges(['whatsappNumber', 'name', 'nameConfirmed']))
+                    // Sub Admin with "Add / disable Admins": enable/disable & WhatsApp of plain Admins
+                    || (can('manageTeam') && request.auth.uid != uid
+                        && resource.data.get('role', 'admin') == 'admin'
+                        && onlyChanges(['active', 'whatsappNumber']));
       allow delete: if isSuper();
     }
 
-    // Public part of a staff profile: name + WhatsApp number that customer
+    // Public part of a team profile: name + WhatsApp number that customer
     // order links open. Single document lookups are public; listing is staff-only.
     match /publicStaff/{uid} {
       allow get: if true;
@@ -122,8 +148,11 @@ service cloud.firestore {
                     || (isStaff()
                         && request.auth.uid == uid
                         && request.resource.data.uid == uid
-                        && request.resource.data.name == get(staffPath()).data.name
-                        && request.resource.data.active == true);
+                        && request.resource.data.name == me().name
+                        && request.resource.data.active == true)
+                    || (can('manageTeam') && request.auth.uid != uid
+                        && request.resource.data.uid == uid
+                        && staffRole(uid) == 'admin');
       allow delete: if isSuper();
     }
   }

@@ -4,6 +4,7 @@ Sample-link ordering for **GFive — Glamour Grace Unlimited** (Kolkata). The we
 
 - **Customer link** — `/s/<id>`: one design (photo gallery with zoom, colour photos, pieces per colour, firm details) and "Place order on WhatsApp". No catalogue, no cart.
 - **Admin** — `/admin` (login required; `/` redirects here): Orders dashboard, Samples, Add / Edit sample, PDF sales-order invoices, Ask AI.
+- **Sub Admin** — Admin + only the powers the Super Admin ticks for that person on the Team page (e.g. see all orders, change status of all orders, change Sales Person credit, add samples in another Admin's name, edit any sample, Sales Person Sales report, AI photo/video, Ask AI, add/disable Admins, company settings, permanent delete). Keys live in `lib/permissions.ts` and are enforced in `firestore.rules` (`staff/{uid}.permissions`) and the `/api` routes.
 - **Super Admin** — everything above + Sales Person Sales (Sales Person-wise orders & sales for salary, CSV export), Team (create logins, set each person's WhatsApp number, disable staff), Settings, permanent delete, and correcting the salesperson on old orders.
 
 ## Staff ownership & attribution

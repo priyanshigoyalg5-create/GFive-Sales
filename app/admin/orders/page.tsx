@@ -33,20 +33,24 @@ function inRange(d: Date | null, r: Range) {
 }
 
 export default function OrdersPage() {
-  const { isSuper } = useAuth();
-  const { orders: myOrders, loading, error } = useOrders(); // staff: only their own orders
-  const staffList = useStaffList(isSuper);
+  const { can, profile } = useAuth();
+  const myUid = profile?.uid || '';
+  const seeAll = can('viewAllOrders'); // Super Admin, or a Sub Admin given this power
+  const manageAll = can('manageAllOrders');
+  const canManage = (o: Order) => manageAll || (!!myUid && o.salesPersonUid === myUid);
+  const { orders: myOrders, loading, error } = useOrders(); // Admin: only their own orders
+  const staffList = useStaffList(seeAll);
   const [staffFilter, setStaffFilter] = useState(''); // '' = everyone, 'unassigned', or a uid
   const [catFilter, setCatFilter] = useState('');
   const orders = useMemo(
     () =>
       myOrders.filter((o) => {
         if (catFilter && normCategory(orderCategory(o)) !== catFilter) return false;
-        if (!isSuper || !staffFilter) return true;
+        if (!seeAll || !staffFilter) return true;
         const s = orderSeller(o);
         return staffFilter === 'unassigned' ? !s.uid : s.uid === staffFilter;
       }),
-    [myOrders, catFilter, staffFilter, isSuper],
+    [myOrders, catFilter, staffFilter, seeAll],
   );
   const { samples } = useSamples();
   const settings = useSettings();
@@ -102,7 +106,8 @@ export default function OrdersPage() {
     return list.sort((a, b) => rank(a) - rank(b));
   }, [orders, tab, q, range]);
 
-  const allSel = shown.length > 0 && shown.every((o) => sel.includes(o.id));
+  const selectable = shown.filter(canManage);
+  const allSel = selectable.length > 0 && selectable.every((o) => sel.includes(o.id));
 
   const bulk = async (fn: (id: string, b: ReturnType<typeof writeBatch>) => void) => {
     const b = writeBatch(db);
@@ -155,7 +160,7 @@ export default function OrdersPage() {
       <PageHeader
         eyebrow="Live"
         title="Orders"
-        subtitle={isSuper ? 'Orders of every Sales Person. Use the filters to see one Sales Person.' : 'Only orders from the links you shared are shown here.'}
+        subtitle={seeAll ? 'Orders of every Sales Person. Use the filters to see one Sales Person.' : 'Only orders from the links you shared are shown here.'}
         actions={
           <button className="btn btn-outline" onClick={exportCsv} disabled={!shown.length}>
             <Download size={16} /> Export CSV
@@ -182,7 +187,7 @@ export default function OrdersPage() {
             <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
             <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order no. (e.g. 22), firm, design, city or mobile" />
           </div>
-          {isSuper && (
+          {seeAll && (
             <div className="relative">
               <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-48" aria-label="Sales Person">
                 <option value="">All Sales Persons</option>
@@ -231,7 +236,7 @@ export default function OrdersPage() {
       {shown.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
           <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : shown.map((o) => o.id))} />
+            <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : selectable.map((o) => o.id))} />
             Select all ({shown.length})
           </label>
           {sel.length > 0 && (
@@ -242,7 +247,7 @@ export default function OrdersPage() {
                   <button className="btn btn-sm btn-outline" onClick={() => bulk((id, b) => b.update(doc(db, 'orders', id), { isTrashed: false }))}>
                     <RotateCcw size={14} /> Restore
                   </button>
-                  {isSuper && (
+                  {can('deleteOrders') && (
                     <button
                       className="btn btn-sm btn-danger"
                       onClick={() => confirm(`Permanently delete ${sel.length} order(s)?`) && bulk((id, b) => b.delete(doc(db, 'orders', id)))}
@@ -293,8 +298,9 @@ export default function OrdersPage() {
               key={o.id}
               order={o}
               selected={sel.includes(o.id)}
-              canDelete={isSuper}
-              staffList={isSuper ? staffList : null}
+              canDelete={can('deleteOrders')}
+              canManage={canManage(o)}
+              staffList={can('reassignOrders') ? staffList : null}
               onSelect={() => setSel((p) => (p.includes(o.id) ? p.filter((x) => x !== o.id) : [...p, o.id]))}
               onInvoice={() => setInvoice(o)}
               onPhotos={() => openGallery(o)}
@@ -312,11 +318,12 @@ export default function OrdersPage() {
 }
 
 function OrderCard({
-  order: o, selected, canDelete, staffList, onSelect, onInvoice, onPhotos,
+  order: o, selected, canDelete, canManage, staffList, onSelect, onInvoice, onPhotos,
 }: {
   order: Order;
   selected: boolean;
   canDelete: boolean;
+  canManage: boolean; // may change status / trash (own orders, or 'Change status of all orders')
   staffList: PublicStaff[] | null; // Super Admin only: can correct the salesperson
   onSelect: () => void;
   onInvoice: () => void;
@@ -335,14 +342,19 @@ function OrderCard({
       {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-3">
-          <input type="checkbox" className="size-4 accent-leaf-700" checked={selected} onChange={onSelect} aria-label="Select order" />
+          {canManage && <input type="checkbox" className="size-4 accent-leaf-700" checked={selected} onChange={onSelect} aria-label="Select order" />}
           <span className="font-display text-xl font-semibold text-leaf-800">{displayOrderId(o)}</span>
           <span className="text-xs text-muted">{date ? formatDate(date, true) : 'Just now'}</span>
           {categoryName(orderCategory(o)) && (
             <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(orderCategory(o))}</span>
           )}
         </div>
-        {o.isTrashed ? (
+        {!canManage ? (
+          <span className={`inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium ${style.pill}`}>
+            <span className={`size-2 rounded-full ${style.dot}`} />
+            {o.isTrashed ? 'In trash' : st}
+          </span>
+        ) : o.isTrashed ? (
           <div className="flex gap-2">
             <button className="btn btn-sm btn-outline" onClick={() => updateDoc(doc(db, 'orders', o.id), { isTrashed: false })}>
               <RotateCcw size={14} /> Restore
@@ -444,7 +456,7 @@ function OrderCard({
           <span className="font-display text-xl font-semibold text-leaf-700">{inr(o.totalAmount)}</span>
         </p>
         <div className="flex gap-2">
-          {!o.isTrashed && (
+          {!o.isTrashed && canManage && (
             <button className="btn btn-sm btn-ghost !text-red-700" onClick={() => updateDoc(doc(db, 'orders', o.id), { isTrashed: true })} aria-label="Move to trash">
               <Trash2 size={15} />
             </button>

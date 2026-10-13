@@ -17,13 +17,15 @@ import AiStudio from '@/components/admin/AiStudio';
 import Lightbox from '@/components/Lightbox';
 
 export default function AdminSamplesPage() {
-  const { isSuper, profile } = useAuth();
+  const { isSuper, can, profile } = useAuth();
+  const editAll = can('editAllSamples');
+  const seeAllOrders = can('viewAllOrders');
   const uid = profile?.uid || '';
   const { samples, loading } = useSamples();
   const { orders } = useOrders(); // already limited to this person's own orders (all for Super Admin)
-  const [tab, setTab] = useState<'mine' | 'all' | 'trash'>(isSuper ? 'all' : 'mine');
+  const [tab, setTab] = useState<'mine' | 'all' | 'trash'>(isSuper || editAll ? 'all' : 'mine');
   const [cat, setCat] = useState<string>('');
-  const canEdit = (s: Sample) => isSuper || (!!s.createdByUid && s.createdByUid === uid);
+  const canEdit = (s: Sample) => editAll || (!!s.createdByUid && s.createdByUid === uid);
   const owner = (s: Sample) => s.createdByName || s.salesPerson || '';
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string[]>([]);
@@ -77,9 +79,11 @@ export default function AdminSamplesPage() {
         subtitle="Shared catalogue. Links you share carry your name, so orders from them are credited to you." 
         actions={
           <>
-            <Link href="/admin/samples/new" className="btn btn-primary">
-              <PlusCircle size={16} /> Add sample
-            </Link>
+            {can('addSamples') && (
+              <Link href="/admin/samples/new" className="btn btn-primary">
+                <PlusCircle size={16} /> Add sample
+              </Link>
+            )}
           </>
         }
       />
@@ -115,7 +119,7 @@ export default function AdminSamplesPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : selectable.map((s) => s.id))} />
-            Select all{tab === 'all' && !isSuper ? ' my' : ''} ({selectable.length})
+            Select all{tab === 'all' && !editAll ? ' my' : ''} ({selectable.length})
           </label>
           {sel.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -129,7 +133,7 @@ export default function AdminSamplesPage() {
                   <button className="btn btn-sm btn-outline" onClick={() => setTrash(sel, false)}>
                     <RotateCcw size={14} /> Restore
                   </button>
-                  {isSuper && (
+                  {can('deleteSamples') && (
                     <button className="btn btn-sm btn-danger" onClick={() => destroy(sel)}>
                       Delete forever
                     </button>
@@ -146,7 +150,7 @@ export default function AdminSamplesPage() {
       ) : shown.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="font-display text-2xl">{tab === 'trash' ? 'Trash is empty' : q || cat ? 'No matching samples' : tab === 'mine' ? 'You haven’t added any samples yet' : 'No samples yet'}</p>
-          {tab !== 'trash' && !q && !cat && (
+          {tab !== 'trash' && !q && !cat && can('addSamples') && (
             <Link href="/admin/samples/new" className="btn btn-primary mt-4"><PlusCircle size={16} /> Add your first sample</Link>
           )}
         </div>
@@ -186,7 +190,7 @@ export default function AdminSamplesPage() {
                         </button>
                       )}
                     </span>
-                    {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {isSuper ? 'ordered' : 'by you'}</span>}
+                    {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {seeAllOrders ? 'ordered' : 'by you'}</span>}
                   </div>
                 </div>
                 <p className={`border-b border-line py-1 text-center text-xs font-medium ${photos[0] && s.aiImages?.includes(photos[0]) ? 'text-gold-600' : 'text-muted'}`}>
@@ -208,7 +212,12 @@ export default function AdminSamplesPage() {
                     ))}
                     {colors.length > 4 && <span className="rounded-full bg-sand px-2 py-0.5 text-[13px]">+{colors.length - 4}</span>}
                   </div>
-                  {owner(s) && <p className="mt-2 text-[13px] text-muted">Added by {s.createdByUid === uid ? 'you' : owner(s)}</p>}
+                  {owner(s) && (
+                    <p className="mt-2 text-[13px] text-muted">
+                      Added by {s.createdByUid === uid ? 'you' : owner(s)}
+                      {s.addedByName && s.addedByUid !== s.createdByUid && <> · uploaded by {s.addedByUid === uid ? 'you' : s.addedByName}</>}
+                    </p>
+                  )}
 
                   <div className="mt-auto pt-3">
                     {s.isTrashed ? (
@@ -216,7 +225,7 @@ export default function AdminSamplesPage() {
                         <button className="btn btn-sm btn-outline" onClick={() => updateDoc(doc(db, 'samples', s.id), { isTrashed: false })}>
                           <RotateCcw size={14} /> Restore
                         </button>
-                        {isSuper ? (
+                        {can('deleteSamples') ? (
                           <button
                             className="btn btn-sm btn-danger"
                             onClick={() => confirm(`Delete #${s.designNumber} forever?`) && deleteDoc(doc(db, 'samples', s.id))}
@@ -230,7 +239,7 @@ export default function AdminSamplesPage() {
                         <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid, profile?.name)}>
                           <MessageCircle size={14} /> Share
                         </button>
-                        {photos.some((u) => !s.aiImages?.includes(u)) && (
+                        {can('aiMedia') && photos.some((u) => !s.aiImages?.includes(u)) && (
                           <button className="btn btn-sm btn-outline mt-2 w-full !border-gold-500/50 !text-gold-600" onClick={() => setAiFor(s)}>
                             <Sparkles size={14} /> AI model photo / video
                           </button>

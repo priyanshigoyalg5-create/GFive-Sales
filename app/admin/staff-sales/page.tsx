@@ -30,9 +30,9 @@ interface Row {
 const emptyStatus = () => Object.fromEntries(ORDER_STATUSES.map((s) => [s, { n: 0, value: 0 }])) as Row['byStatus'];
 
 export default function StaffSalesPage() {
-  const { isSuper } = useAuth();
+  const { can } = useAuth();
   const { orders, loading } = useOrders();
-  const staff = useStaffList(isSuper);
+  const staff = useStaffList(can('staffSales'));
   const now = new Date();
   const [period, setPeriod] = useState<Period>('thisMonth');
   const [month, setMonth] = useState(monthKey(now));
@@ -125,7 +125,7 @@ export default function StaffSalesPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Super Admin"
+        eyebrow="Report"
         title="Sales Person-wise orders & sales"
         subtitle="Every order is credited to exactly one Sales Person — the person whose link the customer ordered from."
         actions={

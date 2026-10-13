@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firest
 import { db, getAppAuth } from './firebase';
 import type { Role, StaffProfile } from './types';
 import { syncPublicStaff } from './staff';
+import { hasPermission, type Permission, type PermissionMap } from './permissions';
 
 /** Comma separated list of e-mails that are always Super Admin (bootstrap). */
 export const SUPERADMIN_EMAILS = (process.env.NEXT_PUBLIC_SUPERADMIN_EMAILS || '')
@@ -30,6 +31,8 @@ interface AuthCtx {
   profile: StaffProfile | null;
   role: Role | null;
   isSuper: boolean;
+  /** Can the signed-in person use this feature? (Super Admin: always) */
+  can: (p: Permission) => boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -52,7 +55,7 @@ async function loadProfile(user: User): Promise<AuthState> {
         return { status: 'no-access', user, reason: 'Your account has been disabled. Please contact the Super Admin.' };
       }
       // Bootstrap emails are always super admin even if the doc says otherwise.
-      const role: Role = SUPERADMIN_EMAILS.includes(email) ? 'superadmin' : data.role || 'admin';
+      const role: Role = SUPERADMIN_EMAILS.includes(email) ? 'superadmin' : (['admin', 'subadmin', 'superadmin'] as Role[]).includes(data.role) ? data.role : 'admin';
       const profile: StaffProfile = { ...data, uid: user.uid, role, active: true };
       // make sure the public profile used by customer links exists
       syncPublicStaff({ uid: user.uid, name: profile.name, whatsappNumber: profile.whatsappNumber || '', active: true }).catch(() => {});
@@ -108,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       role: profile?.role ?? null,
       isSuper: profile?.role === 'superadmin',
+      can: (p) => hasPermission(profile?.role, profile?.permissions as PermissionMap | undefined, p),
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(getAppAuth(), email.trim(), password);
       },

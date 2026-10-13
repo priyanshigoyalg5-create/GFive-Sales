@@ -32,19 +32,21 @@ export function useSamples() {
 /**
  * Orders visible to the signed-in person.
  * - Super Admin: every order.
+ * - Sub Admin with "See every Sales Person's orders": all orders.
  * - Admin (staff): ONLY orders credited to them (salesPersonUid == their uid).
  *   The Firestore rules enforce the same thing, so other staff's orders can't be
  *   read even with a hand-made request.
  */
 export function useOrders(enabled = true) {
-  const { profile, isSuper } = useAuth();
+  const { profile, can } = useAuth();
   const uid = profile?.uid || '';
+  const all = can('viewAllOrders'); // Super Admin, or Sub Admin allowed to see everyone's orders
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!enabled || !uid) return;
-    const q = isSuper
+    const q = all
       ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
       : query(collection(db, 'orders'), where('salesPersonUid', '==', uid));
     return onSnapshot(
@@ -62,6 +64,6 @@ export function useOrders(enabled = true) {
         setLoading(false);
       },
     );
-  }, [enabled, uid, isSuper]);
+  }, [enabled, uid, all]);
   return { orders, loading, error };
 }

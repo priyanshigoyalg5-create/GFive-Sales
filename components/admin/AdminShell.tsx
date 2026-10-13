@@ -5,16 +5,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { ROLE_LABEL, type Permission } from '@/lib/permissions';
 import NamePrompt from './NamePrompt';
 
-const NAV = [
-  { href: '/admin/orders', label: 'Orders', icon: ClipboardList, superOnly: false },
-  { href: '/admin/samples', label: 'Samples', icon: Shirt, superOnly: false },
-  { href: '/admin/samples/new', label: 'Add Sample', icon: PlusCircle, superOnly: false },
-  { href: '/admin/assistant', label: 'Ask AI', icon: Sparkles, superOnly: false },
-  { href: '/admin/staff-sales', label: 'Sales Person Sales', icon: BarChart3, superOnly: true },
-  { href: '/admin/team', label: 'Team', icon: Users, superOnly: true },
-  { href: '/admin/settings', label: 'Settings', icon: Settings, superOnly: true },
+// `need` = permission required to see the page (Super Admin always can)
+const NAV: { href: string; label: string; icon: typeof ClipboardList; need?: Permission }[] = [
+  { href: '/admin/orders', label: 'Orders', icon: ClipboardList },
+  { href: '/admin/samples', label: 'Samples', icon: Shirt },
+  { href: '/admin/samples/new', label: 'Add Sample', icon: PlusCircle, need: 'addSamples' },
+  { href: '/admin/assistant', label: 'Ask AI', icon: Sparkles, need: 'askAI' },
+  { href: '/admin/staff-sales', label: 'Sales Person Sales', icon: BarChart3, need: 'staffSales' },
+  { href: '/admin/team', label: 'Team', icon: Users, need: 'manageTeam' },
+  { href: '/admin/settings', label: 'Settings', icon: Settings, need: 'settings' },
 ];
 
 function isActive(path: string, href: string) {
@@ -23,7 +25,8 @@ function isActive(path: string, href: string) {
 }
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
-  const { state, profile, isSuper, signOut, needsName } = useAuth();
+  const { state, profile, isSuper, can, signOut, needsName } = useAuth();
+  const roleLabel = profile ? ROLE_LABEL[profile.role] || 'Admin' : '';
   const path = usePathname();
   const router = useRouter();
 
@@ -55,8 +58,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     );
   }
 
-  const nav = NAV.filter((n) => !n.superOnly || isSuper);
-  const superPage = NAV.find((n) => n.superOnly && path.startsWith(n.href));
+  const nav = NAV.filter((n) => !n.need || can(n.need));
+  const blocked = NAV.find((n) => n.need && (path === n.href || path.startsWith(n.href + '/')) && !can(n.need));
+  const extra = nav.filter((n) => ['/admin/staff-sales', '/admin/team', '/admin/settings'].includes(n.href));
+  const bottom = nav.filter((n) => !extra.includes(n)).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-cream lg:pl-64">
@@ -86,7 +91,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="m-3 rounded-xl bg-white/5 p-3">
           <Link href="/admin/profile" className="block truncate text-sm font-medium hover:text-gold-100">{profile?.name}</Link>
           <p className="flex items-center gap-1 text-xs text-gold-100/80">
-            {isSuper && <Crown size={12} />} {isSuper ? 'Super Admin' : 'Admin'}
+            {isSuper && <Crown size={12} />} {roleLabel}
           </p>
           <button onClick={() => signOut()} className="mt-2 inline-flex items-center gap-1.5 text-xs text-ivory/70 hover:text-white">
             <LogOut size={13} /> Sign out
@@ -99,16 +104,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <Link href="/admin/orders" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="h-8 w-auto" />
-          <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[13px] text-leaf-800">{isSuper ? 'Super Admin' : 'Admin'}</span>
+          <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[13px] text-leaf-800">{roleLabel}</span>
         </Link>
         <div className="flex items-center gap-1">
-          {isSuper && (
-            <>
-              <Link href="/admin/staff-sales" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Sales Person sales"><BarChart3 size={18} /></Link>
-              <Link href="/admin/team" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Team"><Users size={18} /></Link>
-              <Link href="/admin/settings" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Settings"><Settings size={18} /></Link>
-            </>
-          )}
+          {extra.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label={label}><Icon size={18} /></Link>
+          ))}
           <Link href="/admin/profile" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="My profile"><UserRound size={18} /></Link>
           <button onClick={() => signOut()} className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="Sign out">
             <LogOut size={18} />
@@ -117,16 +118,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 lg:px-8 lg:pb-12 lg:pt-8">
-        {superPage && !isSuper ? (
-          <div className="card p-10 text-center text-muted">Only the Super Admin can open this page.</div>
+        {blocked ? (
+          <div className="card p-10 text-center text-muted">You don’t have access to this page. Ask the Super Admin to give you permission.</div>
         ) : (
           children
         )}
       </main>
 
       {/* Bottom nav (mobile) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-ivory/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        {NAV.slice(0, 4).map(({ href, label, icon: Icon }) => {
+      <nav style={{ gridTemplateColumns: `repeat(${bottom.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-30 grid border-t border-line bg-ivory/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        {bottom.map(({ href, label, icon: Icon }) => {
           const on = isActive(path, href);
           return (
             <Link key={href} href={href} className={`flex flex-col items-center gap-0.5 py-2 text-[13px] ${on ? 'text-leaf-800' : 'text-muted'}`}>

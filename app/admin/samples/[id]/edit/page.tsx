@@ -14,7 +14,7 @@ import { useAuth } from '@/lib/auth';
 export default function EditSamplePage() {
   const { id } = useParams<{ id: string }>();
   const [sample, setSample] = useState<Sample | null | undefined>(undefined);
-  const { profile, isSuper } = useAuth();
+  const { profile, can } = useAuth();
 
   useEffect(() => {
     getDoc(doc(db, 'samples', id))
@@ -31,7 +31,7 @@ export default function EditSamplePage() {
       </div>
     );
 
-  const canEdit = isSuper || (!!sample.createdByUid && sample.createdByUid === profile?.uid);
+  const canEdit = can('editAllSamples') || (!!sample.createdByUid && sample.createdByUid === profile?.uid);
   if (!canEdit)
     return (
       <div className="card p-10 text-center">

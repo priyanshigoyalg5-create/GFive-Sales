@@ -49,7 +49,7 @@ function SettingsForm({ current, msg, setMsg }: { current: CompanySettings; msg:
 
   return (
     <>
-      <PageHeader eyebrow="Super Admin" title="Settings" subtitle="Business details used on the shop, WhatsApp orders and PDF invoices." />
+      <PageHeader eyebrow="Business" title="Settings" subtitle="Business details used on the shop, WhatsApp orders and PDF invoices." />
       <form onSubmit={save} className="card max-w-2xl space-y-4 p-5">
         {FIELDS.map((f) => (
           <label key={f.key} className="block">

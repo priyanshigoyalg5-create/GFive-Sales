@@ -1,6 +1,6 @@
 import type { Timestamp } from 'firebase/firestore';
 
-export type Role = 'admin' | 'superadmin';
+export type Role = 'admin' | 'subadmin' | 'superadmin';
 
 export interface StaffProfile {
   uid: string;
@@ -10,6 +10,7 @@ export interface StaffProfile {
   active: boolean;
   whatsappNumber?: string; // digits with country code; orders from this person's links open this chat
   nameConfirmed?: boolean; // the person typed their own name (first sign-in)
+  permissions?: Partial<Record<string, boolean>>; // Sub Admin only — set by the Super Admin (see lib/permissions.ts)
   createdAt?: Timestamp | null;
 }
 
@@ -48,6 +49,8 @@ export interface Sample {
   createdBy?: string; // creator e-mail (legacy)
   createdByUid?: string; // sample owner (creator) — set automatically
   createdByName?: string;
+  addedByUid?: string; // who uploaded it, when added on behalf of another Admin
+  addedByName?: string;
 }
 
 export type OrderStatus = 'Pending' | 'Dispatched' | 'Completed' | 'Cancelled';

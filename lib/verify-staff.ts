@@ -4,14 +4,23 @@
  * Firebase ID token*, so Google validates the token and the security rules
  * decide access. No service-account key is needed.
  */
-export async function verifyStaff(idToken: string | null): Promise<{ uid: string; name: string; role: string } | null> {
+export interface VerifiedStaff {
+  uid: string;
+  name: string;
+  role: string;
+  permissions: Record<string, boolean>;
+}
+
+export async function verifyStaff(idToken: string | null): Promise<VerifiedStaff | null> {
   if (!idToken) return null;
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) return null;
   let uid = '';
+  let tokenEmail = '';
   try {
     const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString('utf8'));
     uid = payload.user_id || payload.sub || '';
+    tokenEmail = String(payload.email || '').toLowerCase();
     if (payload.aud !== projectId || (payload.exp && payload.exp * 1000 < Date.now())) return null;
   } catch {
     return null;
@@ -25,5 +34,12 @@ export async function verifyStaff(idToken: string | null): Promise<{ uid: string
   const doc = await res.json();
   const f = doc.fields || {};
   if (f.active?.booleanValue === false) return null;
-  return { uid, name: f.name?.stringValue || '', role: f.role?.stringValue || 'admin' };
+  const permissions: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries((f.permissions?.mapValue?.fields || {}) as Record<string, { booleanValue?: boolean }>)) {
+    permissions[k] = v.booleanValue === true;
+  }
+  const email = tokenEmail; // from the Google-verified token
+  const boot = (process.env.NEXT_PUBLIC_SUPERADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const role = boot.includes(email) ? 'superadmin' : f.role?.stringValue || 'admin';
+  return { uid, name: f.name?.stringValue || '', role, permissions };
 }
