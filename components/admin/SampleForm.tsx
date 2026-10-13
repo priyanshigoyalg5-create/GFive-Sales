@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import {
-  ImagePlus, X, Star, ChevronLeft, ChevronRight, Plus, Loader2, Palette, CheckCircle2, Copy, MessageCircle, ExternalLink, Camera,
+  ImagePlus, X, Star, ChevronLeft, ChevronRight, Plus, Loader2, CheckCircle2, Copy, MessageCircle, ExternalLink,
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
@@ -313,35 +313,12 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
           <ul className="mt-4 space-y-2.5">
             {colors.map((row) => (
               <li key={row.id} className="flex items-center gap-2.5">
-                <label className="relative grid size-12 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-xl border border-dashed border-gold-500/60 bg-gold-50/60 text-gold-600" title="Colour photo (optional)">
-                  {row.photo ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={row.photo.preview} alt="" className="size-full object-cover" />
-                  ) : (
-                    <Camera size={18} />
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="absolute inset-0 opacity-0"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) setColors((cs) => cs.map((c) => (c.id === row.id ? { ...c, photo: { id: uid(), file: f, preview: URL.createObjectURL(f) } } : c)));
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
                 <input
                   className="input"
                   value={row.name}
                   onChange={(e) => setColors((cs) => cs.map((c) => (c.id === row.id ? { ...c, name: e.target.value } : c)))}
                   placeholder="Colour name (e.g. Rust, M1)"
                 />
-                {row.photo && (
-                  <button type="button" onClick={() => setColors((cs) => cs.map((c) => (c.id === row.id ? { ...c, photo: null } : c)))} className="shrink-0 text-xs text-muted hover:text-red-700">
-                    Remove photo
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setColors((cs) => (cs.length === 1 ? [{ id: uid(), name: '', photo: null }] : cs.filter((c) => c.id !== row.id)))}
@@ -357,7 +334,6 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
             <Plus size={15} /> Add colour row
           </button>
           {errors.colors && <p className="mt-2 text-sm text-red-700">{errors.colors}</p>}
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted"><Palette size={13} /> Colour photos are optional — customers can tap them to see the shade.</p>
         </section>
 
         {errors.form && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{errors.form}</p>}
