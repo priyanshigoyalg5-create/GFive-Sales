@@ -52,3 +52,13 @@ The "Ask Gfive" chat on the shop answers customer questions (English / Hindi / H
 3. Redeploy. Without the key, the chat button is simply hidden.
 
 The assistant never invents designs or prices, and sends customers to WhatsApp for stock, delivery dates, discounts and order status.
+
+## Gfive Insights — AI sales assistant for staff (Admin → Ask AI)
+
+Staff can ask things like "Aaj kitne orders aaye?", "Is mahine sabse zyada kaunsa design bika?" or "Kis sales person ne sabse zyada sale kiya aur kyun?".
+
+- All numbers (orders, pieces, amounts, top designs, sales-person totals, pending orders) are calculated exactly in `lib/analytics.ts`; the AI only explains them, so it can't get the maths wrong.
+- The summary cards at the top work even without an API key.
+- `/api/admin-chat` checks the signed-in user is active staff (via their Firebase token + Firestore rules) before calling the AI.
+- Uses the same `ANTHROPIC_API_KEY`. Optional `CHAT_ADMIN_MODEL` (default `claude-sonnet-5-5`).
+- Sales-person credit = the person whose name is on the design sample (whose shared link brought the order).
