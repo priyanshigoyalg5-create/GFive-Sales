@@ -1,5 +1,3 @@
-import { doc, runTransaction } from 'firebase/firestore';
-import { db } from './firebase';
 import type { Order, OrderLine, OrderStatus } from './types';
 import { inr } from './format';
 import { categoryName } from './categories';
@@ -88,16 +86,6 @@ export function orderCategory(o: Order): string {
 }
 
 /** Atomic counter -> "GFive#23". Same counter document as before, so numbering continues. */
-export async function nextOrderNumber(): Promise<string> {
-  const counterRef = doc(db, 'counters', 'sales_orders');
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(counterRef);
-    const next = snap.exists() ? Number(snap.data().currentSeq || 0) + 1 : 1;
-    tx.set(counterRef, { currentSeq: next }, { merge: true });
-    return `GFive#${next}`;
-  });
-}
-
 export interface CustomerDetails {
   firmName: string;
   mobile: string;

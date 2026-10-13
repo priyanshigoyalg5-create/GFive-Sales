@@ -204,7 +204,7 @@ export default function OrdersPage() {
             <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
           </div>
           <div className="relative">
-            <select value={range} onChange={(e) => setRange(e.target.value as Range)} className="input appearance-none pr-9 md:w-44">
+            <select aria-label="Date range" value={range} onChange={(e) => setRange(e.target.value as Range)} className="input appearance-none pr-9 md:w-44">
               <option value="all">All time</option>
               <option value="today">Today</option>
               <option value="7d">Last 7 days</option>
@@ -254,6 +254,7 @@ export default function OrdersPage() {
               ) : (
                 <>
                   <select
+                    aria-label="Change status of selected orders"
                     className="h-9 rounded-full border border-line bg-white px-3 text-sm"
                     defaultValue=""
                     onChange={(e) => {
@@ -330,7 +331,7 @@ function OrderCard({
   const done = st === 'Completed' || st === 'Cancelled';
 
   return (
-    <article className={`card overflow-hidden transition ${selected ? 'ring-2 ring-leaf-600' : ''} ${done && !o.isTrashed ? 'opacity-75' : ''} ${o.isTrashed ? 'bg-red-50/40' : ''}`}>
+    <article className={`card overflow-hidden transition ${selected ? 'ring-2 ring-leaf-600' : ''} ${done && !o.isTrashed ? 'bg-sand/40' : ''} ${o.isTrashed ? 'bg-red-50/40' : ''}`}>
       {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-3">
@@ -407,7 +408,7 @@ function OrderCard({
               <button onClick={onPhotos} className="h-16 w-13 shrink-0 overflow-hidden rounded-lg bg-sand" aria-label="View photos">
                 {l.image && (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={cldThumb(l.image, 104, 128)} alt="" className="size-full object-cover" />
+                  <img src={cldThumb(l.image, 104, 128)} alt="" width={52} height={64} loading="lazy" className="size-full object-cover" />
                 )}
               </button>
               <div className="min-w-0 flex-1">
@@ -420,7 +421,7 @@ function OrderCard({
                     <span key={c} className="inline-flex items-center gap-1 rounded-full border border-line bg-white py-0.5 pl-0.5 pr-2 text-xs">
                       {l.colorPhotos[c] ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={cldThumb(l.colorPhotos[c], 40, 40)} alt="" className="size-5 rounded-full object-cover" />
+                        <img src={cldThumb(l.colorPhotos[c], 40, 40)} alt="" width={20} height={20} loading="lazy" className="size-5 rounded-full object-cover" />
                       ) : (
                         <span className="ml-1 size-2 rounded-full bg-gold-400" />
                       )}
@@ -467,6 +468,7 @@ function SellerPicker({ order: o, staffList }: { order: Order; staffList: Public
     <label className="flex items-center gap-1.5">
       <span>Salesperson:</span>
       <select
+        aria-label="Salesperson credited for this order"
         value={s.uid}
         onChange={async (e) => {
           const p = staffList.find((x) => x.uid === e.target.value);

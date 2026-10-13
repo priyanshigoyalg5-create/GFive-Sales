@@ -64,7 +64,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-weave text-ivory lg:flex">
         <div className="px-6 pb-4 pt-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo-round.png" alt="GFive" className="size-14 rounded-full ring-1 ring-gold-400/50" />
+          <img src="/brand/logo-round.png" width={447} height={447} alt="GFive" className="size-14 rounded-full ring-1 ring-gold-400/50" />
           <p className="mt-3 font-display text-2xl font-semibold">GFive Sales</p>
           <p className="text-xs tracking-wide text-ivory/60">Admin studio</p>
         </div>
@@ -98,7 +98,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-ivory/95 px-4 backdrop-blur lg:hidden">
         <Link href="/admin/orders" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo-wordmark.png" alt="GFive" className="h-8 w-auto" />
+          <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="h-8 w-auto" />
           <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[11px] text-leaf-800">{isSuper ? 'Super Admin' : 'Admin'}</span>
         </Link>
         <div className="flex items-center gap-1">

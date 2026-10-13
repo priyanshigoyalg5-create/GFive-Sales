@@ -2,18 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, CheckCircle2, Share2 } from 'lucide-react';
-import { db } from '@/lib/firebase';
 import type { OrderLine, Sample } from '@/lib/types';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
 import { sampleColors, samplePhotos, allSamplePhotos, sampleLink } from '@/lib/samples';
-import { buildOrderWhatsAppText, nextOrderNumber, type CustomerDetails } from '@/lib/orders';
+import { buildOrderWhatsAppText, type CustomerDetails } from '@/lib/orders';
 import { loadCustomer, saveCustomer } from '@/lib/customer';
-import { useSettings } from '@/lib/settings';
+import { createOrder, getPublicStaff, getSample, nextOrderNumber, usePublicSettings } from '@/lib/public-db';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
-import { getPublicStaff } from '@/lib/staff';
 import { canShareFiles, fetchImageFile, sharePhotosWithText } from '@/lib/wa-share';
 import { categoryName, normCategory } from '@/lib/categories';
 
@@ -21,7 +18,7 @@ const EMPTY: CustomerDetails = { firmName: '', mobile: '', city: '', gstNo: '', 
 
 export default function SampleOrderPage() {
   const { id } = useParams<{ id: string }>();
-  const settings = useSettings();
+  const settings = usePublicSettings();
 
   const [sample, setSample] = useState<Sample | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'missing'>('loading');
@@ -45,12 +42,12 @@ export default function SampleOrderPage() {
     let alive = true;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, 'samples', id));
+        // sample and the sharing salesperson are fetched at the same time
+        const ref = new URLSearchParams(window.location.search).get('ref');
+        const [found, viaLink] = await Promise.all([getSample(id), getPublicStaff(ref)]);
         if (!alive) return;
-        if (snap.exists() && !snap.data().isTrashed) {
-          const s = { id: snap.id, ...(snap.data() as Omit<Sample, 'id'>) };
-          const ref = new URLSearchParams(window.location.search).get('ref');
-          const viaLink = await getPublicStaff(ref);
+        if (found && !found.isTrashed) {
+          const s = found;
           const viaCreator = viaLink ? null : await getPublicStaff(s.createdByUid);
           const p = viaLink || viaCreator;
           if (!alive) return;
@@ -160,7 +157,7 @@ export default function SampleOrderPage() {
         remarks: c.remarks.trim(),
       };
       const orderNo = await nextOrderNumber();
-      await addDoc(collection(db, 'orders'), {
+      await createOrder({
         orderId: orderNo,
         lines: [line],
         sampleId: sample.id,
@@ -181,7 +178,6 @@ export default function SampleOrderPage() {
         unit: 'pcs',
         status: 'Pending',
         isTrashed: false,
-        createdAt: serverTimestamp(),
       });
       saveCustomer({ ...clean, remarks: '' });
       // link with the salesperson's ref → WhatsApp shows the design photo preview in their chat
@@ -290,7 +286,10 @@ export default function SampleOrderPage() {
                 key={photos[active]}
                 src={cldThumb(photos[active], 1100, 1375)}
                 alt={`Design ${sample.designNumber}`}
-                className="size-full cursor-zoom-in object-cover animate-fade-up"
+                width={1100}
+                height={1375}
+                fetchPriority={active === 0 ? 'high' : undefined}
+                className={`size-full cursor-zoom-in object-cover ${active === 0 ? '' : 'animate-fade-up'}`}
                 onClick={() => setViewer(active)}
               />
             )}
@@ -317,9 +316,9 @@ export default function SampleOrderPage() {
           {photos.length > 1 && (
             <div className="mt-3 flex gap-2 overflow-x-auto">
               {photos.map((p, i) => (
-                <button key={p} onClick={() => setActive(i)} className={`h-20 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === active ? 'border-gold-500' : 'border-transparent opacity-60'}`}>
+                <button key={p} onClick={() => setActive(i)} aria-label={`Show photo ${i + 1}`} aria-pressed={i === active} className={`h-20 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === active ? 'border-gold-500' : 'border-transparent opacity-60'}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cldThumb(p, 128, 160)} alt="" className="size-full object-cover" />
+                  <img src={cldThumb(p, 128, 160)} alt="" width={64} height={80} loading="lazy" className="size-full object-cover" />
                 </button>
               ))}
             </div>

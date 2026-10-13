@@ -14,6 +14,8 @@ export const metadata: Metadata = {
     template: '%s · GFive',
   },
   description: 'GFive Kolkata — designer unstitched suits. Browse samples, pick colours and place your order on WhatsApp.',
+  // Staff studio and private customer links (with wholesale rates) should not appear on Google.
+  robots: { index: false, follow: false },
   icons: {
     icon: '/brand/icon-192.png',
     apple: '/brand/icon-192.png',

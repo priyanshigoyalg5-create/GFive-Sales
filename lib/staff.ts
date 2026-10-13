@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { digitsOnly } from './format';
 import type { PublicStaff } from './types';
@@ -23,18 +23,6 @@ export async function syncPublicStaff(p: PublicStaff): Promise<void> {
 }
 
 /** Customer page: look up the salesperson behind a link (`?ref=`). Returns null if unknown/disabled. */
-export async function getPublicStaff(uid: string | null | undefined): Promise<PublicStaff | null> {
-  if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return null;
-  try {
-    const snap = await getDoc(doc(db, 'publicStaff', uid));
-    if (!snap.exists()) return null;
-    const d = snap.data() as PublicStaff;
-    return d.active === false ? null : { ...d, uid };
-  } catch {
-    return null;
-  }
-}
-
 /** All staff (for filters / attribution). Staff-only read. */
 export function useStaffList(enabled = true) {
   const [list, setList] = useState<PublicStaff[]>([]);

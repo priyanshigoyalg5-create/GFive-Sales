@@ -70,7 +70,7 @@ export default function InvoiceModal({ order, settings, onClose }: { order: Orde
             <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-7">
               <div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/brand/logo-wordmark.png" alt="GFive" className="h-14 w-auto" />
+                <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="h-14 w-auto" />
                 <p className="mt-2 font-semibold">{settings.companyName}</p>
                 <p className="text-xs text-muted">{settings.addressLine}</p>
                 <p className="text-xs text-muted">{[settings.email, settings.website].filter(Boolean).join(' | ')}</p>

@@ -51,7 +51,7 @@ export default function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-weave p-12 text-ivory lg:flex">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/logo-round.png" alt="GFive" className="size-24 rounded-full ring-1 ring-gold-400/50" />
+        <img src="/brand/logo-round.png" width={447} height={447} alt="GFive" className="size-24 rounded-full ring-1 ring-gold-400/50" />
         <div>
           <p className="eyebrow !text-gold-400">GFive Sales Studio</p>
           <h1 className="mt-3 font-display text-6xl font-semibold leading-[1.05]">
@@ -67,7 +67,7 @@ export default function LoginPage() {
       <div className="flex items-center justify-center bg-cream px-5 py-12">
         <div className="w-full max-w-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo-wordmark.png" alt="GFive" className="mx-auto h-16 w-auto lg:hidden" />
+          <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="mx-auto h-16 w-auto lg:hidden" />
           <h2 className="mt-6 font-display text-4xl font-semibold text-ink lg:mt-0">Welcome back</h2>
           <p className="mt-1 text-sm text-muted">Sign in with your Admin or Super Admin account.</p>
 

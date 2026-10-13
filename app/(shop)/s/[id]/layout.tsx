@@ -1,14 +1,29 @@
 import type { Metadata } from 'next';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { cache } from 'react';
+import { doc, getDoc, getFirestore } from 'firebase/firestore/lite';
+import { app } from '@/lib/firebase-app';
+import { cldThumb } from '@/lib/format';
+
+const db = getFirestore(app);
+
+type SampleMeta = { designNumber?: string; price?: number; fabric?: string; work?: string; imageUrl?: string; sampleImages?: string[]; isTrashed?: boolean };
+
+/** One read per request, shared by the metadata and the layout below. */
+const loadSample = cache(async (id: string): Promise<SampleMeta | null> => {
+  try {
+    const snap = await getDoc(doc(db, 'samples', id));
+    return snap.exists() ? (snap.data() as SampleMeta) : null;
+  } catch {
+    return null;
+  }
+});
 
 /** Gives each design link a WhatsApp/Facebook preview with its photo and price. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   try {
-    const snap = await getDoc(doc(db, 'samples', id));
-    if (!snap.exists()) return { title: 'Design' };
-    const s = snap.data() as { designNumber?: string; price?: number; fabric?: string; work?: string; imageUrl?: string; sampleImages?: string[] };
+    const s = await loadSample(id);
+    if (!s) return { title: 'Design' };
     const img = s.imageUrl || s.sampleImages?.[0];
     const title = `Design #${s.designNumber} — ₹${s.price}/pc`;
     const description = [s.fabric, s.work].filter(Boolean).join(' · ') || 'GFive designer unstitched suit';
@@ -33,6 +48,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 }
 
-export default function SampleLayout({ children }: { children: React.ReactNode }) {
-  return children;
+/** Starts downloading the main design photo while the page's JavaScript loads. */
+export default async function SampleLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const s = await loadSample(id);
+  const img = s && !s.isTrashed ? s.imageUrl || s.sampleImages?.[0] : undefined;
+  return (
+    <>
+      {/* React moves this into <head> */}
+      {img && <link rel="preload" as="image" href={cldThumb(img, 1100, 1375)} fetchPriority="high" />}
+      {children}
+    </>
+  );
 }

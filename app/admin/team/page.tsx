@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth, signOut, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import { Crown, Loader2, UserPlus, ShieldCheck, Mail, Ban, CheckCircle2, Eye, EyeOff, MessageCircle } from 'lucide-react';
-import { db, getSecondaryApp } from '@/lib/firebase';
+import { db, getSecondaryAuth } from '@/lib/firebase';
 import { useAuth, authErrorMessage, SUPERADMIN_EMAILS } from '@/lib/auth';
 import type { Role, StaffProfile } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
@@ -39,7 +39,7 @@ export default function TeamPage() {
     setBusy(true);
     try {
       // Create the login on a secondary instance so the Super Admin stays signed in.
-      const secAuth = getAuth(getSecondaryApp());
+      const secAuth = getSecondaryAuth();
       const cred = await createUserWithEmailAndPassword(secAuth, form.email.trim(), form.password);
       await updateProfile(cred.user, { displayName: form.name.trim() });
       await setDoc(doc(db, 'staff', cred.user.uid), {
@@ -91,6 +91,7 @@ export default function TeamPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <select
+                      aria-label={`Role of ${s.name || s.email}`}
                       value={s.role}
                       disabled={me || locked}
                       onChange={(e) => updateDoc(doc(db, 'staff', s.uid), { role: e.target.value })}

@@ -6,8 +6,6 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
   type User,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -92,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const auth = getAppAuth();
-    setPersistence(auth, browserLocalPersistence).catch(() => {});
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setState({ status: 'signed-out' });

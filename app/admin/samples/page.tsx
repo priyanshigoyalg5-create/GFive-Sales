@@ -147,21 +147,21 @@ export default function AdminSamplesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-          {shown.map((s) => {
+          {shown.map((s, idx) => {
             const photos = samplePhotos(s);
             const colors = sampleColors(s);
             const on = sel.includes(s.id);
             const ordered = pcsByDesign.get(s.id) || 0;
             return (
-              <article key={s.id} className={`card flex flex-col overflow-hidden transition ${on ? 'ring-2 ring-leaf-600' : ''} ${s.isTrashed ? 'opacity-80' : ''}`}>
+              <article key={s.id} className={`card flex flex-col overflow-hidden transition ${on ? 'ring-2 ring-leaf-600' : ''} ${s.isTrashed ? 'bg-red-50/40' : ''}`}>
                 <div className="relative aspect-[4/5] bg-sand">
                   {photos[0] && (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={cldThumb(photos[0], 500, 625)} alt="" loading="lazy" className="size-full object-cover" />
+                    <img src={cldThumb(photos[0], 500, 625)} alt={`Design ${s.designNumber}`} width={500} height={625} loading={idx < 4 ? 'eager' : 'lazy'} fetchPriority={idx === 0 ? 'high' : undefined} className="size-full object-cover" />
                   )}
                   {canEdit(s) && (
                     <label className="absolute left-2 top-2 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow">
-                      <input type="checkbox" className="size-4 accent-leaf-700" checked={on} onChange={() => setSel((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))} />
+                      <input type="checkbox" aria-label={`Select design ${s.designNumber}`} className="size-4 accent-leaf-700" checked={on} onChange={() => setSel((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))} />
                     </label>
                   )}
                   <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
@@ -169,12 +169,12 @@ export default function AdminSamplesPage() {
                     {photos.length > 1 ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-white"><Images size={11} /> {photos.length}</span>
                     ) : <span />}
-                    {ordered > 0 && <span className="rounded-full bg-gold-500 px-2 py-0.5 font-medium text-white">{ordered} pcs {isSuper ? 'ordered' : 'by you'}</span>}
+                    {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {isSuper ? 'ordered' : 'by you'}</span>}
                   </div>
                 </div>
                 <div className="flex flex-1 flex-col p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h3>
+                    <h2 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h2>
                     {categoryName(s.category) ? (
                       <span className="shrink-0 rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(s.category)}</span>
                     ) : (
