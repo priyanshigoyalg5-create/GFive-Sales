@@ -9,8 +9,9 @@ import { normWhatsApp, syncPublicStaff } from '@/lib/staff';
 import PageHeader from '@/components/admin/PageHeader';
 
 export default function ProfilePage() {
-  const { profile } = useAuth();
+  const { profile, updateMyName } = useAuth();
   const [wa, setWa] = useState(profile?.whatsappNumber || '');
+  const [name, setName] = useState(profile?.name || '');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   if (!profile) return null;
@@ -18,13 +19,15 @@ export default function ProfilePage() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const n = normWhatsApp(wa);
-    if (n.length < 11) return setMsg('Please enter a valid WhatsApp number.');
+    if (wa.trim() && n.length < 11) return setMsg('Please enter a valid WhatsApp number.');
+    if (name.trim().length < 2 || name.includes('@')) return setMsg('Please enter your name.');
     setBusy(true);
     setMsg(null);
     try {
+      if (name.trim() !== profile.name) await updateMyName(name);
       await updateDoc(doc(db, 'staff', profile.uid), { whatsappNumber: n });
-      await syncPublicStaff({ uid: profile.uid, name: profile.name, whatsappNumber: n, active: true });
-      setMsg('Saved. Orders from links you share will now open WhatsApp chat with +' + n + '.');
+      await syncPublicStaff({ uid: profile.uid, name: name.trim().replace(/\s+/g, ' '), whatsappNumber: n, active: true });
+      setMsg(n ? 'Saved. Orders from links you share will open WhatsApp chat with +' + n + '.' : 'Saved.');
     } catch (err) {
       setMsg((err as Error).message);
     } finally {
@@ -37,10 +40,10 @@ export default function ProfilePage() {
       <PageHeader eyebrow="My account" title="My profile" subtitle="Customers who order from the links you share are sent to your WhatsApp." />
       <form onSubmit={save} className="card max-w-xl space-y-4 p-5">
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <p className="field-label">Name</p>
-            <p className="font-medium">{profile.name}</p>
-          </div>
+          <label className="col-span-2 block">
+            <span className="field-label">My name (shown as Sales Person)</span>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
           <div>
             <p className="field-label">Role</p>
             <p className="font-medium">{profile.role === 'superadmin' ? 'Super Admin' : 'Admin'}</p>

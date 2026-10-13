@@ -14,7 +14,7 @@ import { useSettings } from '@/lib/settings';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
 import { getPublicStaff } from '@/lib/staff';
-import { canShareFiles, copyImageToClipboard, fetchImageFile, sharePhotosWithText } from '@/lib/wa-share';
+import { canShareFiles, fetchImageFile, sharePhotosWithText } from '@/lib/wa-share';
 import { categoryName, normCategory } from '@/lib/categories';
 
 const EMPTY: CustomerDetails = { firmName: '', mobile: '', city: '', gstNo: '', agentName: '', remarks: '' };
@@ -38,7 +38,7 @@ export default function SampleOrderPage() {
   // design photo, fetched in advance so it can be attached to the WhatsApp message instantly
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [phoneShare] = useState(() => canShareFiles());
-  const [sendState, setSendState] = useState<'idle' | 'sending' | 'shared' | 'copied' | 'nocopy'>('idle');
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'shared'>('idle');
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -98,22 +98,18 @@ export default function SampleOrderPage() {
   const waLink = (text: string, to = targetNumber) => `https://api.whatsapp.com/send?phone=${to}&text=${encodeURIComponent(text)}`;
 
   /**
-   * Phone: share sheet with the design photo + full message (customer taps the salesperson's chat).
-   * Computer: photo is copied, the salesperson's chat opens with the message; Ctrl+V adds the photo.
+   * Opens the WhatsApp chat of the salesperson behind the link, with the order message
+   * prefilled. The message ends with the design link, which WhatsApp shows as the design
+   * PHOTO inside the same message (link preview).
    */
-  const sendWithPhoto = async (text: string, to: string) => {
+  const openSellerChat = (text: string, to: string) => window.location.assign(waLink(text, to));
+
+  /** Optional: send the photo as a real attachment (phone share sheet — customer picks the chat). */
+  const sendPhotoAttachment = async (text: string) => {
     setSendState('sending');
     const file = photoFile || (photos[0] ? await fetchImageFile(photos[0], `Design_${sample?.designNumber}.jpg`) : null);
-    if (phoneShare && file) {
-      const r = await sharePhotosWithText([file], text);
-      if (r === 'shared') return setSendState('shared');
-      if (r === 'cancelled') return setSendState('idle');
-      // share not allowed right now (e.g. took too long) → the button on the next screen retries
-      return setSendState('idle');
-    }
-    const copied = await copyImageToClipboard(file);
-    setSendState(copied ? 'copied' : 'nocopy');
-    window.open(waLink(text, to), '_blank');
+    const r = file ? await sharePhotosWithText([file], text) : 'failed';
+    setSendState(r === 'shared' ? 'shared' : 'idle');
   };
 
   const placeOrder = async () => {
@@ -193,7 +189,7 @@ export default function SampleOrderPage() {
       setPlaced({ orderNo, text, pcs: totalPcs, amount: totalAmt, to: targetNumber });
       window.scrollTo({ top: 0 });
       // Order is saved; now send it on WhatsApp WITH the design photo.
-      await sendWithPhoto(text, targetNumber);
+      openSellerChat(text, targetNumber);
     } catch (err) {
       console.error(err);
       setFailMsg('Could not place the order. Please check your internet and try again.');
@@ -232,41 +228,31 @@ export default function SampleOrderPage() {
       <div className="mx-auto max-w-md px-4 py-14 text-center animate-fade-up">
         <CheckCircle2 size={56} className="mx-auto text-leaf-600" strokeWidth={1.5} />
         <p className="eyebrow mt-5">Order saved · one more step</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold text-ink">Send it on WhatsApp</h1>
+        <h1 className="mt-2 font-display text-4xl font-semibold text-ink">Press Send in WhatsApp</h1>
         <p className="mt-2 text-muted">
           Order <span className="font-semibold text-ink">{placed.orderNo}</span> for design #{sample.designNumber} — {placed.pcs} pcs, {inr(placed.amount)}.
         </p>
         <div className="mt-4 rounded-xl bg-gold-50 px-4 py-3 text-left text-sm text-ink ring-1 ring-gold-100">
-          {phoneShare ? (
-            <>
-              <p className="font-medium">Send it with the design photo:</p>
-              <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-                <li>Tap the green button and choose <b>WhatsApp</b></li>
-                <li>Select <b>{seller?.name || 'GFive'}</b>{placed.to ? ` (+${placed.to})` : ''}</li>
-                <li>Press <b>Send</b></li>
-              </ol>
-            </>
-          ) : (
-            <>
-              <p className="font-medium">Send it with the design photo:</p>
-              <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-                <li>WhatsApp opens the chat with <b>{seller?.name || 'GFive'}</b> with your order message</li>
-                <li>Press <b>Ctrl+V</b> in the chat to attach the design photo{sendState === 'nocopy' ? ' — or drag the photo below into the chat' : ''}</li>
-                <li>Press <b>Send</b></li>
-              </ol>
-            </>
-          )}
-          {sendState === 'shared' && <p className="mt-2 text-leaf-800">WhatsApp opened with your photo and message — don’t forget to press Send there.</p>}
+          <p>
+            WhatsApp opens the chat with <b>{seller?.name || 'GFive'}</b>{placed.to ? ` (+${placed.to})` : ''} with your order and the design photo.
+            Please press <b>Send</b> there so we receive it.
+          </p>
+          {sendState === 'shared' && <p className="mt-2 text-leaf-800">Photo shared — press Send in WhatsApp.</p>}
         </div>
         {photos[0] && (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={cldThumb(photos[0], 300, 375)} alt={`Design ${sample.designNumber}`} className="mx-auto mt-4 h-40 rounded-xl object-cover ring-1 ring-line" />
         )}
         <div className="mt-5 grid gap-3">
-          <button className="btn btn-whatsapp h-12" onClick={() => sendWithPhoto(placed.text, placed.to)} disabled={sendState === 'sending'}>
-            {sendState === 'sending' ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
-            {phoneShare ? 'Send on WhatsApp with photo' : 'Copy photo & open WhatsApp chat'}
-          </button>
+          <a href={waLink(placed.text, placed.to)} className="btn btn-whatsapp h-12">
+            <MessageCircle size={18} /> Open WhatsApp chat with {seller?.name || 'GFive'}
+          </a>
+          {phoneShare && (
+            <button className="btn btn-outline" onClick={() => sendPhotoAttachment(placed.text)} disabled={sendState === 'sending'}>
+              {sendState === 'sending' ? <Loader2 size={16} className="animate-spin" /> : null}
+              Send photo as attachment instead
+            </button>
+          )}
           <button
             className="btn btn-ghost"
             onClick={() => {

@@ -18,10 +18,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       openGraph: {
         title: `GFive · ${title}`,
         description: `${description}. Tap to view all colours and place your order.`,
+        // 1200×630 landscape → WhatsApp shows a big photo inside the message bubble.
+        // The suit photo is padded (not cropped) on a cream background.
         images: img
-          ? [{ url: img.replace('/upload/', '/upload/w_800,h_800,c_fill,g_auto,q_80,f_jpg/'), width: 800, height: 800 }]
+          ? [{ url: img.replace('/upload/', '/upload/w_1200,h_630,c_pad,b_rgb:fbf5e9,q_80,f_jpg/'), width: 1200, height: 630, alt: title }]
           : undefined,
+        type: 'website',
+        siteName: 'GFive Kolkata',
       },
+      twitter: { card: 'summary_large_image', title: `GFive · ${title}`, images: img ? [img.replace('/upload/', '/upload/w_1200,h_630,c_pad,b_rgb:fbf5e9,q_80,f_jpg/')] : undefined },
     };
   } catch {
     return { title: 'Design' };

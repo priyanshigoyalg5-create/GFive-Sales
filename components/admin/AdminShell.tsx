@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import NamePrompt from './NamePrompt';
 
 const NAV = [
   { href: '/admin/orders', label: 'Orders', icon: ClipboardList, superOnly: false },
@@ -22,7 +23,7 @@ function isActive(path: string, href: string) {
 }
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
-  const { state, profile, isSuper, signOut } = useAuth();
+  const { state, profile, isSuper, signOut, needsName } = useAuth();
   const path = usePathname();
   const router = useRouter();
 
@@ -137,6 +138,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           );
         })}
       </nav>
+      {needsName && <NamePrompt />}
     </div>
   );
 }

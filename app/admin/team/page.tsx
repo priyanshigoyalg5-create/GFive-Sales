@@ -49,6 +49,7 @@ export default function TeamPage() {
         role: form.role,
         active: true,
         whatsappNumber: normWhatsApp(form.whatsapp),
+        nameConfirmed: true,
         createdAt: serverTimestamp(),
         createdBy: profile?.email || '',
       });

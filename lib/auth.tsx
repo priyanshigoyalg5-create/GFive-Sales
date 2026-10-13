@@ -10,7 +10,7 @@ import {
   browserLocalPersistence,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db, getAppAuth } from './firebase';
 import type { Role, StaffProfile } from './types';
 import { syncPublicStaff } from './staff';
@@ -35,6 +35,10 @@ interface AuthCtx {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  /** Updates own display name (used as Sales Person) everywhere. */
+  updateMyName: (name: string) => Promise<void>;
+  /** True when the name was never set properly (e.g. only the e-mail prefix). */
+  needsName: boolean;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -115,6 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       resetPassword: async (email) => {
         await sendPasswordResetEmail(getAppAuth(), email.trim());
+      },
+      needsName: !!profile && (!profile.nameConfirmed && (!profile.name?.trim() || profile.name.trim().toLowerCase() === (profile.email || '').split('@')[0].toLowerCase())),
+      updateMyName: async (name) => {
+        if (state.status !== 'ready') return;
+        const clean = name.trim().replace(/\s+/g, ' ');
+        const p = state.profile;
+        await updateDoc(doc(db, 'staff', p.uid), { name: clean, nameConfirmed: true });
+        await syncPublicStaff({ uid: p.uid, name: clean, whatsappNumber: p.whatsappNumber || '', active: true });
+        setState({ status: 'ready', user: state.user, profile: { ...p, name: clean, nameConfirmed: true } });
       },
     };
   }, [state]);

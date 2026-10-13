@@ -9,6 +9,7 @@ export interface StaffProfile {
   role: Role;
   active: boolean;
   whatsappNumber?: string; // digits with country code; orders from this person's links open this chat
+  nameConfirmed?: boolean; // the person typed their own name (first sign-in)
   createdAt?: Timestamp | null;
 }
 

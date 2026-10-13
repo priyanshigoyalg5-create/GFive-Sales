@@ -107,9 +107,9 @@ service cloud.firestore {
       allow read: if isSuper() || (signedIn() && request.auth.uid == uid);
       allow create: if isSuper()
                     || (isBootstrapSuper() && request.auth.uid == uid && request.resource.data.role == 'superadmin');
-      // staff can only change their own WhatsApp number
+      // staff can only change their own name and WhatsApp number
       allow update: if isSuper()
-                    || (isStaff() && request.auth.uid == uid && onlyChanges(['whatsappNumber']));
+                    || (isStaff() && request.auth.uid == uid && onlyChanges(['whatsappNumber', 'name', 'nameConfirmed']));
       allow delete: if isSuper();
     }
 
