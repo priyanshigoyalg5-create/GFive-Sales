@@ -12,7 +12,6 @@ import { useAuth } from '@/lib/auth';
 import { useSamples } from '@/lib/hooks';
 import { uploadImage } from '@/lib/upload';
 import { cldThumb } from '@/lib/format';
-import { COLLECTIONS } from '@/lib/collections';
 import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
 import type { Sample } from '@/lib/types';
 
@@ -43,7 +42,6 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
   const [price, setPrice] = useState(initial ? String(initial.price ?? '') : '');
   const [fabric, setFabric] = useState(initial?.fabric || '');
   const [work, setWork] = useState(initial?.work || '');
-  const [collectionId, setCollectionId] = useState(initial?.collection || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [salesPerson, setSalesPerson] = useState(initial?.salesPerson || profile?.name || '');
   const [colors, setColors] = useState<ColorRow[]>(() =>
@@ -150,7 +148,6 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
         price: Number(price),
         fabric: fabric.trim(),
         work: work.trim(),
-        collection: collectionId,
         description: description.trim(),
         salesPerson: salesPerson.trim(),
         colors: colorDetails.map((c) => c.name),
@@ -281,22 +278,6 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
               <datalist id="work-list">{works.map((w) => <option key={w} value={w} />)}</datalist>
             </label>
           </div>
-          <div>
-            <span className="field-label">Collection</span>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {COLLECTIONS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCollectionId(collectionId === c.id ? '' : c.id)}
-                  className={`rounded-xl border px-3 py-2 text-left transition ${collectionId === c.id ? 'border-leaf-700 bg-leaf-50 ring-2 ring-leaf-700/15' : 'border-line bg-white hover:border-leaf-600/40'}`}
-                >
-                  <span className="block font-display text-lg font-semibold leading-tight">{c.name}</span>
-                  <span className="block text-[11px] text-muted">{c.range}</span>
-                </button>
-              ))}
-            </div>
-          </div>
           <label className="block">
             <span className="field-label">Description (optional)</span>
             <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Dupatta, bottom, any extra details shown to customers" />
@@ -396,7 +377,7 @@ export default function SampleForm({ initial }: { initial?: Sample }) {
           <div className="card w-full max-w-sm p-6 text-center animate-fade-up">
             <CheckCircle2 className="mx-auto text-leaf-600" size={48} strokeWidth={1.5} />
             <h3 className="mt-3 font-display text-3xl font-semibold">{editing ? 'Changes saved' : 'Sample created'}</h3>
-            <p className="mt-1 text-sm text-muted">Design #{saved.designNumber} is live in the shop.</p>
+            <p className="mt-1 text-sm text-muted">Design #{saved.designNumber} is ready — share the link with customers.</p>
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-sand/70 px-3 py-2 text-left text-xs text-ink">
               <span className="flex-1 truncate">{sampleLink(saved.id)}</span>
             </div>

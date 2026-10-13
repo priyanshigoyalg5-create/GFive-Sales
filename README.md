@@ -1,9 +1,9 @@
 # GFive Sales Studio
 
-Boutique catalogue + WhatsApp ordering for **GFive — Glamour Grace Unlimited** (Kolkata).
+Sample-link ordering for **GFive — Glamour Grace Unlimited** (Kolkata). The website is for staff; customers only ever receive a single design link on WhatsApp.
 
-- **Shop (public)** — `/` collection, `/s/<id>` design page (photo gallery, zoom, colour-wise quantities), `/cart` (multiple designs, firm details, order on WhatsApp).
-- **Admin** — `/admin` (login required): Orders dashboard, Samples, Add / Edit sample, PDF sales-order invoices.
+- **Customer link** — `/s/<id>`: one design (photo gallery with zoom, colour photos, pieces per colour, firm details) and "Place order on WhatsApp". No catalogue, no cart.
+- **Admin** — `/admin` (login required; `/` redirects here): Orders dashboard, Samples, Add / Edit sample, PDF sales-order invoices, Ask AI.
 - **Super Admin** — everything above + Team (create Admin / Super Admin logins, disable staff), Settings (company details, WhatsApp number), permanent delete.
 
 Old links (`/s/<id>`, `/admin/add?edit=<id>`) keep working, and order numbers continue from the same counter (`GFive#…`).
@@ -43,16 +43,6 @@ npm run dev
 
 PDF invoices embed a subset of the Carlito font (SIL Open Font License) from `public/fonts` so that ₹ prints correctly.
 
-## AI shopping assistant (optional)
-
-The "Ask Gfive" chat on the shop answers customer questions (English / Hindi / Hinglish / Bengali) using the live catalogue and recommends designs with photo cards. It uses Claude through the Anthropic API.
-
-1. Create an API key at https://console.anthropic.com (add a small prepaid credit and a monthly spend limit).
-2. Vercel → Environment Variables: `ANTHROPIC_API_KEY=<key>` (server-only — never prefix with `NEXT_PUBLIC_`). Optional: `CHAT_MODEL` (default `claude-haiku-5-5`).
-3. Redeploy. Without the key, the chat button is simply hidden.
-
-The assistant never invents designs or prices, and sends customers to WhatsApp for stock, delivery dates, discounts and order status.
-
 ## Gfive Insights — AI sales assistant for staff (Admin → Ask AI)
 
 Staff can ask things like "Aaj kitne orders aaye?", "Is mahine sabse zyada kaunsa design bika?" or "Kis sales person ne sabse zyada sale kiya aur kyun?".
@@ -60,5 +50,5 @@ Staff can ask things like "Aaj kitne orders aaye?", "Is mahine sabse zyada kauns
 - All numbers (orders, pieces, amounts, top designs, sales-person totals, pending orders) are calculated exactly in `lib/analytics.ts`; the AI only explains them, so it can't get the maths wrong.
 - The summary cards at the top work even without an API key.
 - `/api/admin-chat` checks the signed-in user is active staff (via their Firebase token + Firestore rules) before calling the AI.
-- Uses the same `ANTHROPIC_API_KEY`. Optional `CHAT_ADMIN_MODEL` (default `claude-sonnet-5-5`).
+- Needs `ANTHROPIC_API_KEY` on Vercel (create at https://console.anthropic.com, set a monthly spend limit). Optional `CHAT_ADMIN_MODEL` (default `claude-sonnet-5-5`). Without the key the page still shows the summary cards.
 - Sales-person credit = the person whose name is on the design sample (whose shared link brought the order).

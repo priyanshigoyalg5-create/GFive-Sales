@@ -5,7 +5,6 @@
 import type { Order, Sample } from './types';
 import { getOrderLines, orderStatus, displayOrderId } from './orders';
 import { tsToDate } from './format';
-import { collectionName } from './collections';
 
 type Range = { key: string; label: string; from: Date; to: Date };
 
@@ -58,10 +57,9 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
     return d >= r.from && d < r.to;
   });
   const total = agg();
-  const designs = new Map<string, Agg & { designNumber: string; colours: Map<string, number>; collection?: string }>();
+  const designs = new Map<string, Agg & { designNumber: string; colours: Map<string, number> }>();
   const people = new Map<string, Agg & { designs: Map<string, number>; cities: Map<string, number>; lines: number }>();
   const cities = new Map<string, Agg>();
-  const colls = new Map<string, Agg>();
   const colours = new Map<string, number>();
   const sampleById = new Map(samples.map((s) => [s.id, s]));
 
@@ -83,7 +81,7 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
     getOrderLines(o).forEach((l) => {
       const s = sampleById.get(l.sampleId) || samples.find((x) => String(x.designNumber) === l.designNumber);
       const key = s?.id || `#${l.designNumber}`;
-      const d = designs.get(key) || { ...agg(), designNumber: l.designNumber, colours: new Map(), collection: s?.collection };
+      const d = designs.get(key) || { ...agg(), designNumber: l.designNumber, colours: new Map() };
       d.orders++;
       d.pcs += l.totalQuantity;
       d.amount += l.totalAmount;
@@ -94,13 +92,6 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
         colours.set(cn, (colours.get(cn) || 0) + q);
       });
       designs.set(key, d);
-
-      const cname = collectionName(s?.collection) || 'No collection';
-      const cl = colls.get(cname) || agg();
-      cl.pcs += l.totalQuantity;
-      cl.amount += l.totalAmount;
-      cl.customers.add(ck);
-      colls.set(cname, cl);
 
       const sp = norm(l.salesPerson || s?.salesPerson);
       const p = people.get(sp) || { ...agg(), designs: new Map(), cities: new Map(), lines: 0 };
@@ -126,7 +117,6 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
     avgOrderValue: total.orders ? Math.round(total.amount / total.orders) : 0,
     topDesigns: top(designs, (v) => v.pcs, 10).map(([, v]) => ({
       design: v.designNumber,
-      collection: collectionName(v.collection) || null,
       ...out(v),
       topColours: top(v.colours, (x) => x, 3).map(([k, q]) => `${k} ${q}`),
     })),
@@ -139,7 +129,6 @@ export function periodStats(orders: Order[], samples: Sample[], r: Range) {
       topCities: top(v.cities, (x) => x, 3).map(([k, q]) => `${k} (${q})`),
     })),
     topCities: top(cities, (v) => v.amount, 6).map(([k, v]) => ({ city: k, ...out(v) })),
-    collections: top(colls, (v) => v.amount, 6).map(([k, v]) => ({ collection: k, pcs: v.pcs, amount: Math.round(v.amount) })),
     topColours: top(colours, (x) => x, 6).map(([k, q]) => `${k} ${q}pcs`),
   };
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Store, Loader2, ShieldAlert, Crown, Sparkles } from 'lucide-react';
+import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const NAV = [
@@ -80,9 +80,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               {label}
             </Link>
           ))}
-          <a href="/" target="_blank" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] text-ivory/70 hover:bg-white/5 hover:text-white">
-            <Store size={18} /> View shop
-          </a>
         </nav>
         <div className="m-3 rounded-xl bg-white/5 p-3">
           <p className="truncate text-sm font-medium">{profile?.name}</p>
@@ -124,11 +121,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </main>
 
       {/* Bottom nav (mobile) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-ivory/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        {[...NAV.slice(0, 4), { href: '/', label: 'Shop', icon: Store, superOnly: false }].map(({ href, label, icon: Icon }) => {
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-ivory/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        {NAV.slice(0, 4).map(({ href, label, icon: Icon }) => {
           const on = isActive(path, href);
           return (
-            <Link key={href} href={href} target={href === '/' ? '_blank' : undefined} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${on ? 'text-leaf-800' : 'text-muted'}`}>
+            <Link key={href} href={href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${on ? 'text-leaf-800' : 'text-muted'}`}>
               <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-leaf-100' : ''}`}>
                 <Icon size={19} />
               </span>

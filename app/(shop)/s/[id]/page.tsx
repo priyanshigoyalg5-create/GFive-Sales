@@ -1,35 +1,36 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, Expand, Share2, ShoppingBag, Zap, Check, Palette, ArrowLeft } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, CheckCircle2, Share2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import type { Sample } from '@/lib/types';
-import { cldThumb, inr } from '@/lib/format';
-import { sampleColors, samplePhotos, allSamplePhotos, sampleLink } from '@/lib/samples';
-import { useCart, itemPcs } from '@/lib/cart';
-import { useSamples } from '@/lib/hooks';
+import type { OrderLine, Sample } from '@/lib/types';
+import { cldThumb, digitsOnly, inr } from '@/lib/format';
+import { sampleColors, samplePhotos, allSamplePhotos } from '@/lib/samples';
+import { buildOrderWhatsAppText, nextOrderNumber, type CustomerDetails } from '@/lib/orders';
+import { loadCustomer, saveCustomer } from '@/lib/customer';
+import { useSettings } from '@/lib/settings';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
-import ProductCard from '@/components/shop/ProductCard';
-import { collectionName } from '@/lib/collections';
 
-export default function ProductPage() {
+const EMPTY: CustomerDetails = { firmName: '', mobile: '', city: '', gstNo: '', agentName: '', remarks: '' };
+
+export default function SampleOrderPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const cart = useCart();
-  const { samples } = useSamples();
+  const settings = useSettings();
 
   const [sample, setSample] = useState<Sample | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'missing'>('loading');
   const [active, setActive] = useState(0);
   const [viewer, setViewer] = useState<number | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [toast, setToast] = useState<string | null>(null);
+  const [c, setC] = useState<CustomerDetails>(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<keyof CustomerDetails | 'qty', string>>>({});
+  const [busy, setBusy] = useState(false);
+  const [failMsg, setFailMsg] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<{ orderNo: string; text: string; pcs: number; amount: number } | null>(null);
   const touchX = useRef<number | null>(null);
-  const prefilled = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -38,95 +39,140 @@ export default function ProductPage() {
         const snap = await getDoc(doc(db, 'samples', id));
         if (!alive) return;
         if (snap.exists() && !snap.data().isTrashed) {
-          setSample({ id: snap.id, ...(snap.data() as Omit<Sample, 'id'>) });
+          const s = { id: snap.id, ...(snap.data() as Omit<Sample, 'id'>) };
+          setSample(s);
+          const init: Record<string, number> = {};
+          sampleColors(s).forEach((col) => (init[col.name] = 0));
+          setQty(init);
           setState('ok');
         } else setState('missing');
       } catch {
         if (alive) setState('missing');
       }
     })();
+    // firm details remembered on this phone from the last order
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setC(loadCustomer({ ...EMPTY, remarks: '' }));
     return () => {
       alive = false;
     };
   }, [id]);
 
-  // Pre-fill quantities from the cart (once) so customers can edit what they added earlier
-  useEffect(() => {
-    if (!sample || !cart.ready || prefilled.current) return;
-    prefilled.current = true;
-    const existing = cart.get(sample.id);
-    const init: Record<string, number> = {};
-    sampleColors(sample).forEach((c) => (init[c.name] = existing?.qty[c.name] || 0));
-    setQty(init);
-  }, [sample, cart]);
-
   const photos = useMemo(() => (sample ? samplePhotos(sample) : []), [sample]);
   const viewerPhotos = useMemo(() => (sample ? allSamplePhotos(sample) : []), [sample]);
   const colors = useMemo(() => (sample ? sampleColors(sample) : []), [sample]);
-  const sampleCollection = sample?.collection;
-  const related = useMemo(() => {
-    const others = samples.filter((s) => !s.isTrashed && s.id !== id);
-    const same = others.filter((s) => sampleCollection && s.collection === sampleCollection);
-    return [...same, ...others.filter((s) => !same.includes(s))].slice(0, 4);
-  }, [samples, id, sampleCollection]);
 
   const totalPcs = Object.values(qty).reduce((a, b) => a + (b || 0), 0);
-  const totalAmt = totalPcs * Number(sample?.price || 0);
-  const inCart = sample ? cart.get(sample.id) : undefined;
+  const price = Number(sample?.price || 0);
+  const totalAmt = totalPcs * price;
 
-  const flash = (m: string) => {
-    setToast(m);
-    setTimeout(() => setToast(null), 2600);
+  const set = (k: keyof CustomerDetails, v: string) => {
+    setC((p) => ({ ...p, [k]: v }));
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
   };
+  const waLink = (text: string) => `https://api.whatsapp.com/send?phone=${settings.whatsappNumber}&text=${encodeURIComponent(text)}`;
 
-  const commit = () => {
-    if (!sample) return false;
-    if (totalPcs <= 0) {
-      flash('Please choose pieces for at least one colour');
-      document.getElementById('colours')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return false;
-    }
-    const colorPhotos: Record<string, string> = {};
-    colors.forEach((c) => c.photoUrl && (colorPhotos[c.name] = c.photoUrl));
-    cart.upsert({
-      sampleId: sample.id,
-      designNumber: sample.designNumber,
-      price: Number(sample.price),
-      image: photos[0] || '',
-      fabric: sample.fabric,
-      work: sample.work,
-      salesPerson: sample.salesPerson,
-      colors: colors.map((c) => c.name),
-      qty,
-      colorPhotos,
-      addedAt: Date.now(),
-    });
-    return true;
-  };
-
-  const share = async () => {
+  const placeOrder = async () => {
     if (!sample) return;
-    const url = sampleLink(sample.id);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `GFive Design #${sample.designNumber}`, url });
-        return;
-      } catch {
-        return;
-      }
+    const e: typeof errors = {};
+    if (totalPcs <= 0) e.qty = 'Please enter pieces for at least one colour';
+    if (!c.firmName.trim()) e.firmName = 'Firm name is required';
+    if (digitsOnly(c.mobile).length < 10) e.mobile = 'Enter a valid 10-digit mobile number';
+    if (!c.city.trim()) e.city = 'City is required';
+    setErrors(e);
+    if (Object.keys(e).length) {
+      document.getElementById(e.qty ? 'colours' : 'details')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
     }
-    await navigator.clipboard.writeText(url);
-    flash('Link copied');
+
+    setBusy(true);
+    setFailMsg(null);
+    try {
+      const items: Record<string, number> = {};
+      const colorPhotos: Record<string, string> = {};
+      colors.forEach((col) => {
+        const q = qty[col.name] || 0;
+        if (q > 0) {
+          items[col.name] = q;
+          if (col.photoUrl) colorPhotos[col.name] = col.photoUrl;
+        }
+      });
+      const line: OrderLine = {
+        sampleId: sample.id,
+        designNumber: sample.designNumber,
+        price,
+        fabric: sample.fabric || '',
+        work: sample.work || '',
+        salesPerson: sample.salesPerson || '',
+        image: photos[0] || '',
+        items,
+        colorPhotos,
+        totalQuantity: totalPcs,
+        totalAmount: totalAmt,
+      };
+      const clean: CustomerDetails = {
+        firmName: c.firmName.trim(),
+        mobile: c.mobile.trim(),
+        city: c.city.trim(),
+        gstNo: c.gstNo.trim().toUpperCase(),
+        agentName: c.agentName.trim(),
+        remarks: c.remarks.trim(),
+      };
+      const orderNo = await nextOrderNumber();
+      await addDoc(collection(db, 'orders'), {
+        orderId: orderNo,
+        lines: [line],
+        sampleId: sample.id,
+        designNumber: sample.designNumber,
+        price,
+        items,
+        colorPhotos,
+        salesPerson: sample.salesPerson || 'N/A',
+        ...clean,
+        totalQuantity: totalPcs,
+        totalAmount: totalAmt,
+        unit: 'pcs',
+        status: 'Pending',
+        isTrashed: false,
+        createdAt: serverTimestamp(),
+      });
+      saveCustomer({ ...clean, remarks: '' });
+      const text = buildOrderWhatsAppText(orderNo, [line], clean, '');
+      setPlaced({ orderNo, text, pcs: totalPcs, amount: totalAmt });
+      window.scrollTo({ top: 0 });
+
+      // Share with the design photo if the phone supports it, else open WhatsApp directly
+      let shared = false;
+      if (navigator.share && photos[0]) {
+        try {
+          const r = await fetch(photos[0]);
+          const b = await r.blob();
+          const file = new File([b], `Design_${sample.designNumber}.jpg`, { type: b.type || 'image/jpeg' });
+          if (navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ text, files: [file] });
+            shared = true;
+          }
+        } catch {
+          /* fall back to link */
+        }
+      }
+      if (!shared) window.location.assign(waLink(text));
+    } catch (err) {
+      console.error(err);
+      setFailMsg('Could not place the order. Please check your internet and try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
+  // ------------------------------------------------------------------ states
   if (state === 'loading') {
     return (
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 md:grid-cols-2">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 md:grid-cols-2">
         <div className="aspect-[4/5] animate-pulse rounded-3xl bg-sand" />
         <div className="space-y-4">
           <div className="h-10 w-1/2 animate-pulse rounded bg-sand" />
-          <div className="h-6 w-1/3 animate-pulse rounded bg-sand" />
-          <div className="h-40 animate-pulse rounded-2xl bg-sand" />
+          <div className="h-48 animate-pulse rounded-2xl bg-sand" />
         </div>
       </div>
     );
@@ -136,8 +182,38 @@ export default function ProductPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <p className="font-display text-3xl text-ink">This design is no longer available</p>
-        <p className="mt-2 text-muted">It may have been sold out or removed. Have a look at our latest collection.</p>
-        <Link href="/" className="btn btn-primary mt-6">Browse collection</Link>
+        <p className="mt-2 text-muted">It may have been sold out or removed. Please contact us on WhatsApp for similar designs.</p>
+        <a href={`https://wa.me/${settings.whatsappNumber}`} className="btn btn-whatsapp mt-6">
+          <MessageCircle size={17} /> Message GFive
+        </a>
+      </div>
+    );
+  }
+
+  if (placed) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-14 text-center animate-fade-up">
+        <CheckCircle2 size={56} className="mx-auto text-leaf-600" strokeWidth={1.5} />
+        <p className="eyebrow mt-5">Order received</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold text-ink">Thank you!</h1>
+        <p className="mt-2 text-muted">
+          Order <span className="font-semibold text-ink">{placed.orderNo}</span> for design #{sample.designNumber} — {placed.pcs} pcs, {inr(placed.amount)}.
+        </p>
+        <p className="mt-1 text-sm text-muted">If WhatsApp did not open, tap below to send the order to us.</p>
+        <div className="mt-6 grid gap-3">
+          <a href={waLink(placed.text)} className="btn btn-whatsapp h-12">
+            <MessageCircle size={18} /> Send order on WhatsApp
+          </a>
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setPlaced(null);
+              setQty(Object.fromEntries(colors.map((col) => [col.name, 0])));
+            }}
+          >
+            Place another order for this design
+          </button>
+        </div>
       </div>
     );
   }
@@ -146,75 +222,51 @@ export default function ProductPage() {
 
   return (
     <div className="pb-28 md:pb-0">
-      <div className="mx-auto max-w-6xl px-4 pt-5">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-leaf-800">
-          <ArrowLeft size={15} /> Collection
-        </Link>
-      </div>
-
-      <div className="mx-auto mt-4 grid max-w-6xl gap-8 px-4 md:grid-cols-[1.1fr_1fr] lg:gap-12">
+      <div className="mx-auto mt-4 grid max-w-5xl gap-6 px-4 md:mt-8 md:grid-cols-[1fr_1fr] lg:gap-10">
         {/* ---------- Gallery */}
         <div className="md:sticky md:top-24 md:self-start">
-          <div className="flex gap-3">
-            {photos.length > 1 && (
-              <div className="hidden max-h-[640px] w-20 shrink-0 flex-col gap-2.5 overflow-y-auto md:flex">
-                {photos.map((p, i) => (
-                  <button
-                    key={p}
-                    onClick={() => setActive(i)}
-                    className={`aspect-[4/5] overflow-hidden rounded-xl border-2 transition ${i === active ? 'border-gold-500' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cldThumb(p, 160, 200)} alt="" className="size-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div
-              className="relative aspect-[4/5] flex-1 overflow-hidden rounded-3xl bg-sand"
-              onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
-              onTouchEnd={(e) => {
-                if (touchX.current === null) return;
-                const dx = e.changedTouches[0].clientX - touchX.current;
-                touchX.current = null;
-                if (Math.abs(dx) > 40) move(dx < 0 ? 1 : -1);
-              }}
-            >
-              {photos[active] && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  key={photos[active]}
-                  src={cldThumb(photos[active], 1100, 1375)}
-                  alt={`Design ${sample.designNumber}`}
-                  className="size-full cursor-zoom-in object-cover animate-fade-up"
-                  onClick={() => setViewer(active)}
-                />
-              )}
-              <button
+          <div
+            className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-sand"
+            onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+            onTouchEnd={(e) => {
+              if (touchX.current === null) return;
+              const dx = e.changedTouches[0].clientX - touchX.current;
+              touchX.current = null;
+              if (Math.abs(dx) > 40) move(dx < 0 ? 1 : -1);
+            }}
+          >
+            {photos[active] && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                key={photos[active]}
+                src={cldThumb(photos[active], 1100, 1375)}
+                alt={`Design ${sample.designNumber}`}
+                className="size-full cursor-zoom-in object-cover animate-fade-up"
                 onClick={() => setViewer(active)}
-                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-medium text-ink shadow backdrop-blur"
-              >
-                <Expand size={13} /> View full screen
-              </button>
-              {photos.length > 1 && (
-                <>
-                  <button onClick={() => move(-1)} className="absolute left-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-ink shadow" aria-label="Previous photo">
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button onClick={() => move(1)} className="absolute right-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-ink shadow" aria-label="Next photo">
-                    <ChevronRight size={20} />
-                  </button>
-                  <div className="absolute inset-x-0 bottom-4 flex justify-center gap-1.5 md:hidden">
-                    {photos.map((p, i) => (
-                      <span key={p} className={`h-1.5 rounded-full transition-all ${i === active ? 'w-5 bg-white' : 'w-1.5 bg-white/60'}`} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+              />
+            )}
+            <button
+              onClick={() => setViewer(active)}
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-medium text-ink shadow backdrop-blur"
+            >
+              <Expand size={13} /> Tap to zoom
+            </button>
+            {photos.length > 1 && (
+              <>
+                <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur">
+                  {active + 1} / {photos.length}
+                </span>
+                <button onClick={() => move(-1)} className="absolute left-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-ink shadow" aria-label="Previous photo">
+                  <ChevronLeft size={20} />
+                </button>
+                <button onClick={() => move(1)} className="absolute right-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-ink shadow" aria-label="Next photo">
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            )}
           </div>
           {photos.length > 1 && (
-            <div className="mt-3 flex gap-2 overflow-x-auto md:hidden">
+            <div className="mt-3 flex gap-2 overflow-x-auto">
               {photos.map((p, i) => (
                 <button key={p} onClick={() => setActive(i)} className={`h-20 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === active ? 'border-gold-500' : 'border-transparent opacity-60'}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -225,25 +277,37 @@ export default function ProductPage() {
           )}
         </div>
 
-        {/* ---------- Details */}
+        {/* ---------- Details + order */}
         <div>
-          <p className="eyebrow">{collectionName(sample.collection) ? `${collectionName(sample.collection)} collection` : 'Unstitched suit'}</p>
-          <div className="mt-2 flex items-start justify-between gap-4">
+          <p className="eyebrow">Unstitched suit</p>
+          <div className="mt-1 flex items-start justify-between gap-4">
             <h1 className="font-display text-4xl font-semibold leading-none text-ink sm:text-5xl">#{sample.designNumber}</h1>
-            <button onClick={share} className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-white text-leaf-800 hover:border-leaf-600/50" aria-label="Share">
+            <button
+              onClick={async () => {
+                if (navigator.share) {
+                  try {
+                    await navigator.share({ title: `GFive Design #${sample.designNumber}`, url: window.location.href });
+                  } catch {
+                    /* cancelled */
+                  }
+                } else {
+                  await navigator.clipboard.writeText(window.location.href);
+                }
+              }}
+              className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-white text-leaf-800"
+              aria-label="Share"
+            >
               <Share2 size={17} />
             </button>
           </div>
-          <p className="mt-4 text-3xl font-semibold text-leaf-700">
-            {inr(sample.price)} <span className="text-base font-normal text-muted">per piece</span>
+          <p className="mt-3 text-3xl font-semibold text-leaf-700">
+            {inr(price)} <span className="text-base font-normal text-muted">per piece</span>
           </p>
 
-          <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line text-sm">
+          <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line text-sm">
             {[
               ['Fabric', sample.fabric],
               ['Work', sample.work],
-              ['Colours', String(colors.length)],
-              ['Photos', String(viewerPhotos.length)],
             ].map(([k, v]) => (
               <div key={k} className="bg-ivory px-4 py-3">
                 <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">{k}</dt>
@@ -252,31 +316,28 @@ export default function ProductPage() {
             ))}
           </dl>
           {sample.description && <p className="mt-4 text-[15px] leading-relaxed text-ink/80">{sample.description}</p>}
+          {sample.salesPerson && (
+            <p className="mt-3 text-sm text-muted">
+              Sales person: <span className="font-medium text-ink">{sample.salesPerson}</span>
+            </p>
+          )}
 
-          {/* Colours & qty */}
-          <div id="colours" className="card mt-6 p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-semibold text-ink">Select pieces</h2>
-              {inCart && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-leaf-50 px-2.5 py-1 text-xs text-leaf-800">
-                  <Check size={12} /> {itemPcs(inCart)} pcs in cart
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-sm text-muted">Tap a colour photo to see it large.</p>
-
-            <ul className="mt-4 divide-y divide-line">
-              {colors.map((c) => (
-                <li key={c.name} className="flex items-center justify-between gap-3 py-3">
+          {/* Colours & quantity */}
+          <section id="colours" className="card mt-6 scroll-mt-24 p-4 sm:p-5">
+            <h2 className="font-display text-2xl font-semibold text-ink">Select quantity (pieces)</h2>
+            <p className="text-sm text-muted">Tap a colour photo to see it large.</p>
+            <ul className="mt-3 divide-y divide-line">
+              {colors.map((col) => (
+                <li key={col.name} className="flex items-center justify-between gap-3 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    {c.photoUrl ? (
+                    {col.photoUrl ? (
                       <button
-                        onClick={() => setViewer(viewerPhotos.indexOf(c.photoUrl))}
-                        className="size-14 shrink-0 overflow-hidden rounded-xl ring-1 ring-line transition hover:ring-2 hover:ring-gold-500"
-                        aria-label={`View ${c.name} photo`}
+                        onClick={() => setViewer(viewerPhotos.indexOf(col.photoUrl))}
+                        className="size-14 shrink-0 overflow-hidden rounded-xl ring-1 ring-line hover:ring-2 hover:ring-gold-500"
+                        aria-label={`View ${col.name} photo`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={cldThumb(c.photoUrl, 120, 120)} alt={c.name} className="size-full object-cover" />
+                        <img src={cldThumb(col.photoUrl, 120, 120)} alt={col.name} className="size-full object-cover" />
                       </button>
                     ) : (
                       <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-sand text-gold-600">
@@ -284,50 +345,64 @@ export default function ProductPage() {
                       </span>
                     )}
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">{c.name}</p>
-                      <p className="text-xs text-muted">{qty[c.name] ? `${inr((qty[c.name] || 0) * sample.price)}` : 'Not selected'}</p>
+                      <p className="truncate font-medium text-ink">{col.name}</p>
+                      <p className="text-xs text-muted">{qty[col.name] ? inr((qty[col.name] || 0) * price) : '—'}</p>
                     </div>
                   </div>
-                  <QtyStepper label={c.name} value={qty[c.name] || 0} onChange={(v) => setQty((p) => ({ ...p, [c.name]: v }))} />
+                  <QtyStepper
+                    label={col.name}
+                    value={qty[col.name] || 0}
+                    onChange={(v) => {
+                      setQty((p) => ({ ...p, [col.name]: v }));
+                      if (errors.qty) setErrors((e) => ({ ...e, qty: undefined }));
+                    }}
+                  />
                 </li>
               ))}
             </ul>
-
+            {errors.qty && <p className="mt-1 text-sm text-red-700">{errors.qty}</p>}
             <div className="mt-2 flex items-center justify-between border-t border-dashed border-line pt-4">
               <span className="text-sm text-muted">Total</span>
               <span className="text-lg font-semibold text-ink">
                 {totalPcs} pcs <span className="text-leaf-700">· {inr(totalAmt)}</span>
               </span>
             </div>
+          </section>
 
-            <div className="mt-5 hidden grid-cols-2 gap-3 md:grid">
-              <button className="btn btn-outline h-12" onClick={() => commit() && flash(inCart ? 'Cart updated' : 'Added to cart')}>
-                <ShoppingBag size={17} /> {inCart ? 'Update cart' : 'Add to cart'}
-              </button>
-              <button className="btn btn-primary h-12" onClick={() => commit() && router.push('/cart')}>
-                <Zap size={17} /> Order now
-              </button>
+          {/* Firm details */}
+          <section id="details" className="card mt-5 scroll-mt-24 p-4 sm:p-5">
+            <h2 className="font-display text-2xl font-semibold text-ink">Your firm details</h2>
+            <p className="text-sm text-muted">Saved on this phone for your next order.</p>
+            <div className="mt-4 space-y-3">
+              <Field label="Firm / Company name *" error={errors.firmName}>
+                <input className="input" value={c.firmName} onChange={(e) => set('firmName', e.target.value)} autoComplete="organization" />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Mobile *" error={errors.mobile}>
+                  <input className="input" type="tel" inputMode="tel" value={c.mobile} onChange={(e) => set('mobile', e.target.value)} autoComplete="tel" />
+                </Field>
+                <Field label="City *" error={errors.city}>
+                  <input className="input" value={c.city} onChange={(e) => set('city', e.target.value)} autoComplete="address-level2" />
+                </Field>
+              </div>
+              <Field label="GST no. (optional)">
+                <input className="input uppercase" value={c.gstNo} onChange={(e) => set('gstNo', e.target.value)} />
+              </Field>
+              <Field label="Agent name (optional)">
+                <input className="input" value={c.agentName} onChange={(e) => set('agentName', e.target.value)} />
+              </Field>
+              <Field label="Remarks (optional)">
+                <textarea className="input" rows={2} value={c.remarks} onChange={(e) => set('remarks', e.target.value)} placeholder="Delivery date, packing, etc." />
+              </Field>
             </div>
-          </div>
-
-          {sample.salesPerson && <p className="mt-4 text-sm text-muted">Your sales contact: <span className="font-medium text-ink">{sample.salesPerson}</span></p>}
+            {failMsg && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{failMsg}</p>}
+            <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp mt-5 hidden h-13 w-full text-[15px] md:flex">
+              {busy ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
+              {busy ? 'Placing order…' : `Place order on WhatsApp · ${totalPcs} pcs`}
+            </button>
+          </section>
         </div>
       </div>
-
-      {related.length > 0 && (
-        <section className="mx-auto mt-16 max-w-6xl px-4">
-          <div className="flex items-end justify-between">
-            <h2 className="font-display text-3xl font-semibold text-ink">More designs</h2>
-            <Link href="/" className="text-sm text-leaf-700 hover:underline">View all</Link>
-          </div>
-          <div className="gold-rule mt-3" />
-          <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4">
-            {related.map((s) => (
-              <ProductCard key={s.id} sample={s} />
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Mobile sticky bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ivory/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur md:hidden">
@@ -335,26 +410,11 @@ export default function ProductPage() {
           <span className="text-muted">{totalPcs} pcs selected</span>
           <span className="font-semibold text-ink">{inr(totalAmt)}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <button className="btn btn-outline h-12" onClick={() => commit() && flash(inCart ? 'Cart updated' : 'Added to cart')}>
-            <ShoppingBag size={17} /> {inCart ? 'Update' : 'Add to cart'}
-          </button>
-          <button className="btn btn-primary h-12" onClick={() => commit() && router.push('/cart')}>
-            <Zap size={17} /> Order now
-          </button>
-        </div>
+        <button onClick={placeOrder} disabled={busy} className="btn btn-whatsapp h-12 w-full text-[15px]">
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
+          {busy ? 'Placing order…' : 'Place order on WhatsApp'}
+        </button>
       </div>
-
-      {toast && (
-        <div className="fixed inset-x-0 bottom-36 z-50 flex justify-center px-4 md:bottom-8">
-          <div className="flex items-center gap-3 rounded-full bg-leaf-900 px-5 py-3 text-sm text-ivory shadow-lift animate-fade-up">
-            {toast}
-            {toast !== 'Link copied' && !toast.startsWith('Please') && (
-              <Link href="/cart" className="font-medium text-gold-400 underline-offset-2 hover:underline">View cart</Link>
-            )}
-          </div>
-        </div>
-      )}
 
       {viewer !== null && viewer >= 0 && (
         <Lightbox
@@ -362,9 +422,19 @@ export default function ProductPage() {
           index={viewer}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}
-          caption={(i) => colors.find((c) => c.photoUrl === viewerPhotos[i])?.name}
+          caption={(i) => colors.find((col) => col.photoUrl === viewerPhotos[i])?.name}
         />
       )}
     </div>
+  );
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="field-label">{label}</span>
+      {children}
+      {error && <span className="mt-1 block text-xs text-red-700">{error}</span>}
+    </label>
   );
 }

@@ -57,18 +57,9 @@ export default function AdminSamplesPage() {
       <PageHeader
         eyebrow="Catalogue"
         title="Samples"
-        subtitle={`${activeCount} designs live in the shop`}
+        subtitle={`${activeCount} active designs · share a design's link with customers on WhatsApp`}
         actions={
           <>
-            <button
-              className="btn btn-outline"
-              onClick={async () => {
-                const text = `*GFive Kolkata — New Collection*\nView all designs & order online:\n${window.location.origin}/`;
-                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-              }}
-            >
-              <MessageCircle size={16} /> Share shop
-            </button>
             <Link href="/admin/samples/new" className="btn btn-primary">
               <PlusCircle size={16} /> Add sample
             </Link>
@@ -197,7 +188,7 @@ export default function AdminSamplesPage() {
                           >
                             {copied === s.id ? <Check size={15} /> : <Link2 size={15} />}
                           </IconBtn>
-                          <a href={`/s/${s.id}`} target="_blank" className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Open in shop">
+                          <a href={`/s/${s.id}`} target="_blank" className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Open customer link">
                             <ExternalLink size={15} />
                           </a>
                           <Link href={`/admin/samples/${s.id}/edit`} className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Edit">

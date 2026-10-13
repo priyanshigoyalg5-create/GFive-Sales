@@ -89,28 +89,35 @@ export interface CustomerDetails {
   remarks: string;
 }
 
-export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: CustomerDetails, origin: string): string {
+export function buildOrderWhatsAppText(orderNo: string, lines: OrderLine[], c: CustomerDetails, origin = ''): string {
   const totalQty = lines.reduce((a, l) => a + l.totalQuantity, 0);
   const totalAmt = lines.reduce((a, l) => a + l.totalAmount, 0);
-  let t = `*GFive Kolkata*\n*NEW ORDER — UNSTITCHED SUITS*\n\n`;
-  t += `*Order No:* ${orderNo}\n\n`;
-  t += `*CUSTOMER DETAILS*\n`;
+  const first = lines[0];
+  // Same layout as the original GFive WhatsApp order message
+  let t = `*-----------GFive KOLKATA-----------*\n`;
+  t += `*NEW UNSTITCHED SUIT SAMPLE*\n\n`;
+  t += `*Order No:* ${orderNo}\n`;
+  t += `*Design No:* ${lines.map((l) => l.designNumber).join(', ')}\n`;
+  if (lines.length === 1) t += `*Price:* ${inr(first.price)}/pc\n`;
+  const sp = Array.from(new Set(lines.map((l) => l.salesPerson).filter(Boolean))).join(', ');
+  if (sp) t += `*Sales Person:* ${sp}\n`;
+  t += `\n*CUSTOMER DETAILS:*\n`;
   t += `• *Firm:* ${c.firmName}\n• *Mobile:* ${c.mobile}\n• *City:* ${c.city}\n`;
   if (c.gstNo) t += `• *GST No:* ${c.gstNo}\n`;
   if (c.agentName) t += `• *Agent:* ${c.agentName}\n`;
   if (c.remarks) t += `• *Remarks:* ${c.remarks}\n`;
-  t += `\n*ORDER*\n------------------------------\n`;
-  lines.forEach((l, i) => {
-    t += `*${i + 1}. Design ${l.designNumber}* — ₹${l.price}/pc\n`;
-    if (l.salesPerson) t += `   Sales person: ${l.salesPerson}\n`;
+  t += `\n*COLOUR        QUANTITIES:*\n`;
+  t += `--------------------------\n`;
+  lines.forEach((l) => {
+    if (lines.length > 1) t += `*Design ${l.designNumber}* (${inr(l.price)}/pc)\n`;
     Object.entries(l.items).forEach(([color, qty]) => {
-      if (qty > 0) t += `   • ${color} → *${qty} pcs*\n`;
+      if (qty > 0) t += `• *${color}* -----------> *${qty} pcs*\n`;
     });
-    t += `   Subtotal: ${l.totalQuantity} pcs = ${inr(l.totalAmount)}\n`;
-    if (l.sampleId && origin) t += `   ${origin}/s/${l.sampleId}\n`;
-    t += `\n`;
+    if (l.sampleId && origin) t += `${origin}/s/${l.sampleId}\n`;
   });
-  t += `------------------------------\n`;
-  t += `*TOTAL:* ${totalQty} pcs\n*TOTAL AMOUNT:* ${inr(totalAmt)}\n`;
+  t += `-------------------------------\n`;
+  t += `*TOTAL:* ${totalQty} pcs\n`;
+  t += `*TOTAL AMOUNT:* ${inr(totalAmt)}\n`;
+  t += `-------------------------------`;
   return t;
 }
