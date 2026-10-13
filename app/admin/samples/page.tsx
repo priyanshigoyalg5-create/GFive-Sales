@@ -1,470 +1,341 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Play, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { useAuth } from '@/lib/auth';
+import { useOrders, useSamples } from '@/lib/hooks';
+import { cldThumb, inr } from '@/lib/format';
+import { getOrderLines } from '@/lib/orders';
+import { sampleColors, samplePhotos, sampleLink, shareSampleOnWhatsApp } from '@/lib/samples';
+import PageHeader from '@/components/admin/PageHeader';
+import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
+import type { Sample } from '@/lib/types';
+import AiStudio from '@/components/admin/AiStudio';
+import Lightbox from '@/components/Lightbox';
 
-export default function AllSamplesPage() {
-  const [samples, setSamples] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'Active' | 'Trash'>('Active');
-  const [selectedSampleIds, setSelectedSampleIds] = useState<string[]>([]);
+export default function AdminSamplesPage() {
+  const { isSuper, can, profile } = useAuth();
+  const editAll = can('editAllSamples');
+  const seeAllOrders = can('viewAllOrders');
+  const uid = profile?.uid || '';
+  const { samples, loading } = useSamples();
+  const { orders } = useOrders(); // already limited to this person's own orders (all for Super Admin)
+  const [tab, setTab] = useState<'mine' | 'all' | 'trash'>(isSuper || editAll ? 'all' : 'mine');
+  const [cat, setCat] = useState<string>('');
+  const canEdit = (s: Sample) => editAll || (!!s.createdByUid && s.createdByUid === uid);
+  const owner = (s: Sample) => s.createdByName || s.salesPerson || '';
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<string[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [aiFor, setAiFor] = useState<Sample | null>(null);
+  const [gallery, setGallery] = useState<{ s: Sample; index: number } | null>(null);
+  const [playing, setPlaying] = useState<Sample | null>(null);
 
-  useEffect(() => {
-    const q = query(collection(db, 'samples'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setSamples(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching samples: ", error);
-      setLoading(false);
-    });
+  const pcsByDesign = useMemo(() => {
+    const m = new Map<string, number>();
+    orders
+      .filter((o) => !o.isTrashed && o.status !== 'Cancelled')
+      .forEach((o) => getOrderLines(o).forEach((l) => l.sampleId && m.set(l.sampleId, (m.get(l.sampleId) || 0) + l.totalQuantity)));
+    return m;
+  }, [orders]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const handleMoveToTrash = async (sampleId: string) => {
-    try {
-      const docRef = doc(db, 'samples', sampleId);
-      await updateDoc(docRef, { isTrashed: true });
-    } catch (err) {
-      console.error('Failed to move to trash:', err);
-      alert('Failed to move sample to trash.');
-    }
-  };
-
-  const handleRestoreFromTrash = async (sampleId: string) => {
-    try {
-      const docRef = doc(db, 'samples', sampleId);
-      await updateDoc(docRef, { isTrashed: false });
-    } catch (err) {
-      console.error('Failed to restore sample:', err);
-      alert('Failed to restore sample.');
-    }
-  };
-
-  const handlePermanentDelete = async (sampleId: string, designNo: string) => {
-    if (confirm(`⚠️ Permanently delete Design #${designNo}? This cannot be undone.`)) {
-      try {
-        await deleteDoc(doc(db, 'samples', sampleId));
-      } catch (err) {
-        console.error('Failed to permanently delete sample:', err);
-        alert('Failed to delete sample.');
-      }
-    }
-  };
-
-  const toggleSelectSample = (id: string) => {
-    setSelectedSampleIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = (filteredIds: string[]) => {
-    const allSelected = filteredIds.every((id) => selectedSampleIds.includes(id));
-    if (allSelected) {
-      setSelectedSampleIds([]);
-    } else {
-      setSelectedSampleIds(filteredIds);
-    }
-  };
-
-  const handleBulkMoveToTrash = async () => {
-    if (selectedSampleIds.length === 0) return;
-    if (confirm(`Move ${selectedSampleIds.length} selected sample(s) to Trash?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedSampleIds.forEach((id) => {
-          const docRef = doc(db, 'samples', id);
-          batch.update(docRef, { isTrashed: true });
-        });
-        await batch.commit();
-        setSelectedSampleIds([]);
-      } catch (err) {
-        console.error('Bulk trash failed:', err);
-      }
-    }
-  };
-
-  const handleBulkRestore = async () => {
-    if (selectedSampleIds.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      selectedSampleIds.forEach((id) => {
-        const docRef = doc(db, 'samples', id);
-        batch.update(docRef, { isTrashed: false });
-      });
-      await batch.commit();
-      setSelectedSampleIds([]);
-    } catch (err) {
-      console.error('Bulk restore failed:', err);
-    }
-  };
-
-  const handleBulkPermanentDelete = async () => {
-    if (selectedSampleIds.length === 0) return;
-    if (confirm(`⚠️ Permanently delete ${selectedSampleIds.length} selected sample(s)?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedSampleIds.forEach((id) => {
-          const docRef = doc(db, 'samples', id);
-          batch.delete(docRef);
-        });
-        await batch.commit();
-        setSelectedSampleIds([]);
-      } catch (err) {
-        console.error('Bulk delete failed:', err);
-      }
-    }
-  };
-
-  const filteredSamples = samples.filter((s) => {
-    const isTrashed = !!s.isTrashed;
-    if (statusFilter === 'Trash' && !isTrashed) return false;
-    if (statusFilter === 'Active' && isTrashed) return false;
-
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      String(s.designNumber || '').toLowerCase().includes(q) ||
-      String(s.fabric || '').toLowerCase().includes(q) ||
-      String(s.work || '').toLowerCase().includes(q)
-    );
+  const live = samples.filter((s) => !s.isTrashed);
+  const activeCount = live.length;
+  const mineCount = live.filter((s) => s.createdByUid === uid).length;
+  // trash: own trashed samples (Super Admin sees all)
+  const trashList = samples.filter((s) => s.isTrashed && canEdit(s));
+  const trashCount = trashList.length;
+  const base = tab === 'trash' ? trashList : tab === 'mine' ? live.filter((s) => s.createdByUid === uid) : live;
+  const shown = base.filter((s) => {
+    if (cat && normCategory(s.category) !== cat) return false;
+    const t = q.trim().toLowerCase();
+    return !t || [s.designNumber, s.fabric, s.work, owner(s), categoryName(s.category)].some((v) => String(v || '').toLowerCase().includes(t));
   });
+  const selectable = shown.filter(canEdit);
+  const allSel = selectable.length > 0 && selectable.every((s) => sel.includes(s.id));
 
-  const filteredSampleIds = filteredSamples.map((s) => s.id);
-  const isAllFilteredSelected = filteredSampleIds.length > 0 && filteredSampleIds.every((id) => selectedSampleIds.includes(id));
-  const trashCount = samples.filter((s) => !!s.isTrashed).length;
-  const activeCount = samples.filter((s) => !s.isTrashed).length;
-
-  if (loading) {
-    return <div style={{ padding: '60px', textAlign: 'center', color: '#0f172a', fontWeight: 'bold' }}>Loading All Uploaded Samples...</div>;
-  }
+  const setTrash = async (ids: string[], value: boolean) => {
+    const b = writeBatch(db);
+    ids.forEach((id) => b.update(doc(db, 'samples', id), { isTrashed: value }));
+    await b.commit();
+    setSel([]);
+  };
+  const destroy = async (ids: string[]) => {
+    if (!confirm(`Permanently delete ${ids.length} sample(s)? This cannot be undone.`)) return;
+    const b = writeBatch(db);
+    ids.forEach((id) => b.delete(doc(db, 'samples', id)));
+    await b.commit();
+    setSel([]);
+  };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f8fafc',
-      padding: '24px 16px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-        
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              🛍️ All Uploaded Fabric Samples
-            </h1>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
-              Shopping style catalog of all design samples created by Admin ({activeCount} active items)
-            </p>
-          </div>
-
-          <a 
-            href="/admin/add" 
-            style={{
-              background: '#2563eb',
-              color: '#ffffff',
-              padding: '10px 18px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '14px',
-              textDecoration: 'none',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-            }}
-          >
-            ➕ Add New Sample
-          </a>
-        </div>
-
-        {/* Search & Status Filters */}
-        <div style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ flex: '1 1 300px' }}>
-            <input
-              type="text"
-              placeholder="Search by Design No, Fabric or Work..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 18px',
-                borderRadius: '14px',
-                border: '2px solid #cbd5e1',
-                fontSize: '14px',
-                fontWeight: '600',
-                background: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => { setStatusFilter('Active'); setSelectedSampleIds([]); }}
-              style={{
-                padding: '10px 16px',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: statusFilter === 'Active' ? '#0f172a' : '#f1f5f9',
-                color: statusFilter === 'Active' ? '#ffffff' : '#475569'
-              }}
-            >
-              📂 Active ({activeCount})
-            </button>
-            <button
-              onClick={() => { setStatusFilter('Trash'); setSelectedSampleIds([]); }}
-              style={{
-                padding: '10px 16px',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: statusFilter === 'Trash' ? '#dc2626' : '#f1f5f9',
-                color: statusFilter === 'Trash' ? '#ffffff' : '#dc2626'
-              }}
-            >
-              🗑️ Trash ({trashCount})
-            </button>
-          </div>
-        </div>
-
-        {/* Bulk Selection Bar */}
-        {filteredSamples.length > 0 && (
-          <div style={{ background: '#ffffff', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-              <input
-                type="checkbox"
-                checked={isAllFilteredSelected}
-                onChange={() => handleSelectAll(filteredSampleIds)}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563eb' }}
-              />
-              Select All Shown ({filteredSamples.length})
-            </label>
-
-            {selectedSampleIds.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#2563eb', background: '#dbeafe', padding: '4px 10px', borderRadius: '6px' }}>
-                  {selectedSampleIds.length} Selected
-                </span>
-
-                {statusFilter === 'Trash' ? (
-                  <>
-                    <button onClick={handleBulkRestore} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      🔄 Restore Selected
-                    </button>
-                    <button onClick={handleBulkPermanentDelete} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      💥 Delete Permanently
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={handleBulkMoveToTrash} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                    🗑️ Move Selected to Trash
-                  </button>
-                )}
-              </div>
+    <>
+      <PageHeader
+        eyebrow="Catalogue"
+        title="Samples"
+        subtitle="Shared catalogue. Links you share carry your name, so orders from them are credited to you." 
+        actions={
+          <>
+            {can('addSamples') && (
+              <Link href="/admin/samples/new" className="btn btn-primary">
+                <PlusCircle size={16} /> Add sample
+              </Link>
             )}
-          </div>
-        )}
+          </>
+        }
+      />
 
-        {/* Shopping Catalog Grid */}
-        {filteredSamples.length === 0 ? (
-          <div style={{ background: '#ffffff', padding: '40px', borderRadius: '20px', textAlign: 'center', color: '#64748b', border: '1px solid #e2e8f0' }}>
-            No samples found matching your search.
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: '20px'
-          }}>
-            {filteredSamples.map((sample) => {
-              const allPhotos = sample.sampleImages && sample.sampleImages.length > 0 ? sample.sampleImages : [sample.imageUrl];
-              const isSelected = selectedSampleIds.includes(sample.id);
-              const isTrashed = !!sample.isTrashed;
+      <div className="card mb-5 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+          <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search design no., fabric, work, Sales Person" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setTab('mine'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'mine' ? 'chip-active' : ''}`}>
+            My samples ({mineCount})
+          </button>
+          <button onClick={() => { setTab('all'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'all' ? 'chip-active' : ''}`}>
+            All ({activeCount})
+          </button>
+          <button onClick={() => { setTab('trash'); setSel([]); }} className={`chip h-10 px-4 ${tab === 'trash' ? '!border-red-700 !bg-red-700 !text-white' : ''}`}>
+            <Trash2 size={14} /> Trash ({trashCount})
+          </button>
+        </div>
+      </div>
 
-              return (
-                <div 
-                  key={sample.id}
-                  style={{
-                    background: isSelected ? '#eff6ff' : '#ffffff',
-                    borderRadius: '20px',
-                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                    overflow: 'hidden',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    opacity: isTrashed ? 0.75 : 1,
-                    position: 'relative'
-                  }}
-                >
-                  <div>
-                    {/* Main Image with Checkbox */}
-                    <div style={{ position: 'relative', width: '100%', height: '260px', background: '#f1f5f9' }}>
-                      <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 10 }}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectSample(sample.id)}
-                          style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#2563eb' }}
-                        />
-                      </div>
+      <div className="mb-4 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+        <button onClick={() => setCat('')} className={`chip shrink-0 ${!cat ? 'chip-active' : ''}`}>All categories</button>
+        {CATEGORIES.map((c) => (
+          <button key={c.id} onClick={() => setCat(cat === c.id ? '' : c.id)} className={`chip shrink-0 ${cat === c.id ? 'chip-active' : ''}`}>
+            {c.name} <span className="opacity-60">{base.filter((s) => normCategory(s.category) === c.id).length}</span>
+          </button>
+        ))}
+      </div>
 
-                      <img 
-                        src={sample.imageUrl} 
-                        alt={sample.designNumber} 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                      <span style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        background: '#15803d',
-                        color: '#ffffff',
-                        padding: '4px 10px',
-                        borderRadius: '10px',
-                        fontSize: '13px',
-                        fontWeight: '800'
-                      }}>
-                        ₹{sample.price} / pc
-                      </span>
+      {selectable.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : selectable.map((s) => s.id))} />
+            Select all{tab === 'all' && !editAll ? ' my' : ''} ({selectable.length})
+          </label>
+          {sel.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-leaf-800">{sel.length} selected</span>
+              {tab !== 'trash' ? (
+                <button className="btn btn-sm btn-outline !text-red-700" onClick={() => setTrash(sel, true)}>
+                  <Trash2 size={14} /> Move to trash
+                </button>
+              ) : (
+                <>
+                  <button className="btn btn-sm btn-outline" onClick={() => setTrash(sel, false)}>
+                    <RotateCcw size={14} /> Restore
+                  </button>
+                  {can('deleteSamples') && (
+                    <button className="btn btn-sm btn-danger" onClick={() => destroy(sel)}>
+                      Delete forever
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-                      {allPhotos.length > 1 && (
-                        <span style={{
-                          position: 'absolute',
-                          bottom: '12px',
-                          left: '12px',
-                          background: 'rgba(15, 23, 42, 0.8)',
-                          color: '#ffffff',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          📷 {allPhotos.length} Photos
-                        </span>
+      {loading ? (
+        <div className="grid place-items-center py-24"><Loader2 className="animate-spin text-leaf-700" /></div>
+      ) : shown.length === 0 ? (
+        <div className="card p-12 text-center">
+          <p className="font-display text-2xl">{tab === 'trash' ? 'Trash is empty' : q || cat ? 'No matching samples' : tab === 'mine' ? 'You haven’t added any samples yet' : 'No samples yet'}</p>
+          {tab !== 'trash' && !q && !cat && can('addSamples') && (
+            <Link href="/admin/samples/new" className="btn btn-primary mt-4"><PlusCircle size={16} /> Add your first sample</Link>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          {shown.map((s, idx) => {
+            const photos = samplePhotos(s);
+            const colors = sampleColors(s);
+            const on = sel.includes(s.id);
+            const ordered = pcsByDesign.get(s.id) || 0;
+            return (
+              <article key={s.id} className={`card flex flex-col overflow-hidden transition ${on ? 'ring-2 ring-leaf-600' : ''} ${s.isTrashed ? 'bg-red-50/40' : ''}`}>
+                <div className="relative aspect-[4/5] bg-sand">
+                  {photos[0] && (
+                    <button type="button" className="absolute inset-0 cursor-zoom-in" onClick={() => setGallery({ s, index: 0 })} aria-label={`View photos of design ${s.designNumber}`} />
+                  )}
+                  {photos[0] && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={cldThumb(photos[0], 500, 625)} alt={`Design ${s.designNumber}`} width={500} height={625} loading={idx < 4 ? 'eager' : 'lazy'} fetchPriority={idx === 0 ? 'high' : undefined} className="pointer-events-none size-full object-cover" />
+                  )}
+                  {canEdit(s) && (
+                    <label className="absolute left-2 top-2 grid size-8 cursor-pointer place-items-center rounded-full bg-white/90 shadow">
+                      <input type="checkbox" aria-label={`Select design ${s.designNumber}`} className="size-4 accent-leaf-700" checked={on} onChange={() => setSel((p) => (on ? p.filter((x) => x !== s.id) : [...p, s.id]))} />
+                    </label>
+                  )}
+                  <span className="absolute right-2 top-2 rounded-full bg-leaf-800/90 px-2.5 py-1 text-xs font-semibold text-ivory">{inr(s.price)}</span>
+                  <div className="pointer-events-none absolute inset-x-2 bottom-2 flex justify-between text-[13px]">
+                    <span className="flex gap-1">
+                      {photos.length > 1 && (
+                        <button type="button" onClick={() => setGallery({ s, index: 0 })} className="pointer-events-auto relative inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-white" aria-label={`View ${photos.length} photos`}>
+                          <Images size={11} /> {photos.length}
+                        </button>
                       )}
-                    </div>
-
-                    {/* Content */}
-                    <div style={{ padding: '16px' }}>
-                      <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 8px 0', color: '#0f172a' }}>
-                        Design #{sample.designNumber}
-                      </h2>
-
-                      <div style={{ fontSize: '13px', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {sample.fabric && <div><strong>Fabric:</strong> {sample.fabric}</div>}
-                        {sample.work && <div><strong>Work:</strong> {sample.work}</div>}
-                        {sample.remarks && <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '12px' }}>{sample.remarks}</div>}
-                      </div>
-
-                      {/* Colours */}
-                      {sample.colors && sample.colors.length > 0 && (
-                        <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {sample.colors.map((col: string) => (
-                            <span key={col} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#0f172a', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>
-                              {col}
-                            </span>
-                          ))}
-                        </div>
+                      {s.videoUrl && (
+                        <button type="button" onClick={() => setPlaying(s)} className="pointer-events-auto relative inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-white" aria-label={`Play video of design ${s.designNumber}`}>
+                          <Play size={11} fill="currentColor" /> Video
+                        </button>
                       )}
-                    </div>
+                    </span>
+                    {ordered > 0 && <span className="rounded-full bg-gold-600 px-2 py-0.5 font-medium text-white">{ordered} pcs {seeAllOrders ? 'ordered' : 'by you'}</span>}
                   </div>
+                </div>
+                <p className={`border-b border-line py-1 text-center text-xs font-medium ${photos[0] && s.aiImages?.includes(photos[0]) ? 'text-gold-600' : 'text-muted'}`}>
+                  {photos[0] && s.aiImages?.includes(photos[0]) ? 'AI generated' : 'Original'}
+                </p>
+                <div className="flex flex-1 flex-col p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="font-display text-xl font-semibold leading-tight">#{s.designNumber}</h2>
+                    {categoryName(s.category) ? (
+                      <span className="shrink-0 rounded-full bg-gold-50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(s.category)}</span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[12px] text-red-700">No category</span>
+                    )}
+                  </div>
+                  <p className="line-clamp-1 text-xs text-muted">{[s.fabric, s.work].filter(Boolean).join(' · ') || '—'}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {colors.slice(0, 4).map((c) => (
+                      <span key={c.name} className="rounded-full bg-sand px-2 py-0.5 text-[13px]">{c.name}</span>
+                    ))}
+                    {colors.length > 4 && <span className="rounded-full bg-sand px-2 py-0.5 text-[13px]">+{colors.length - 4}</span>}
+                  </div>
+                  {owner(s) && (
+                    <p className="mt-2 text-[13px] text-muted">
+                      Added by {s.createdByUid === uid ? 'you' : owner(s)}
+                      {s.addedByName && s.addedByUid !== s.createdByUid && <> · uploaded by {s.addedByUid === uid ? 'you' : s.addedByName}</>}
+                    </p>
+                  )}
 
-                  {/* Actions */}
-                  <div style={{ padding: '16px', paddingTop: 0, display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {isTrashed ? (
-                      <>
-                        <button 
-                          onClick={() => handleRestoreFromTrash(sample.id)}
-                          style={{ flex: 1, background: '#16a34a', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        >
-                          🔄 Restore
+                  <div className="mt-auto pt-3">
+                    {s.isTrashed ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button className="btn btn-sm btn-outline" onClick={() => updateDoc(doc(db, 'samples', s.id), { isTrashed: false })}>
+                          <RotateCcw size={14} /> Restore
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePermanentDelete(sample.id, sample.designNumber)}
-                          style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        >
-                          💥 Delete
-                        </button>
-                      </>
+                        {can('deleteSamples') ? (
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() => confirm(`Delete #${s.designNumber} forever?`) && deleteDoc(doc(db, 'samples', s.id))}
+                          >
+                            Delete
+                          </button>
+                        ) : <span />}
+                      </div>
                     ) : (
                       <>
-                        <a 
-                          href={`/s/${sample.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            flex: 1,
-                            background: '#0f172a',
-                            color: '#ffffff',
-                            padding: '10px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            textDecoration: 'none',
-                            textAlign: 'center'
-                          }}
-                        >
-                          🔗 Link
-                        </a>
-
-                        <a 
-                          href={`/admin/add?edit=${sample.id}`}
-                          style={{
-                            background: '#e0e7ff',
-                            color: '#3730a3',
-                            border: '1px solid #c7d2fe',
-                            padding: '10px 12px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            textDecoration: 'none',
-                            textAlign: 'center'
-                          }}
-                        >
-                          ✏️ Edit
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => handleMoveToTrash(sample.id)}
-                          style={{
-                            background: '#fee2e2',
-                            color: '#dc2626',
-                            border: '1px solid #fca5a5',
-                            padding: '10px',
-                            borderRadius: '10px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🗑️
+                        <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid, profile?.name)}>
+                          <MessageCircle size={14} /> Share
                         </button>
+                        {can('aiMedia') && photos.some((u) => !s.aiImages?.includes(u)) && (
+                          <button className="btn btn-sm btn-outline mt-2 w-full !border-gold-500/50 !text-gold-600" onClick={() => setAiFor(s)}>
+                            <Sparkles size={14} /> AI model photo / video
+                          </button>
+                        )}
+                        <div className={`mt-2 grid gap-1.5 ${canEdit(s) ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                          <IconBtn
+                            label={copied === s.id ? 'Copied' : 'Copy link'}
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(sampleLink(s.id, uid));
+                              setCopied(s.id);
+                              setTimeout(() => setCopied(null), 1500);
+                            }}
+                          >
+                            {copied === s.id ? <Check size={15} /> : <Link2 size={15} />}
+                          </IconBtn>
+                          <a href={sampleLink(s.id, uid)} target="_blank" className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Open customer link">
+                            <ExternalLink size={15} />
+                          </a>
+                          {canEdit(s) && (
+                            <>
+                              <Link href={`/admin/samples/${s.id}/edit`} className="grid h-9 place-items-center rounded-full border border-line text-leaf-800 hover:bg-leaf-50" title="Edit">
+                                <Pencil size={15} />
+                              </Link>
+                              <IconBtn label="Move to trash" danger onClick={() => updateDoc(doc(db, 'samples', s.id), { isTrashed: true })}>
+                                <Trash2 size={15} />
+                              </IconBtn>
+                            </>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
-
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {gallery && (() => {
+        const imgs = samplePhotos(gallery.s);
+        return (
+          <Lightbox
+            images={imgs}
+            index={gallery.index}
+            onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))}
+            onClose={() => setGallery(null)}
+            caption={(i) => `#${gallery.s.designNumber} · ${gallery.s.aiImages?.includes(imgs[i]) ? 'AI generated' : 'Original'}`}
+          />
+        );
+      })()}
+      {playing?.videoUrl && (
+        <div className="fixed inset-0 z-[95] flex flex-col items-center justify-center bg-[#0d1709]/95 p-4" role="dialog" aria-modal="true" aria-label={`Video of design ${playing.designNumber}`} onClick={() => setPlaying(null)}>
+          <button type="button" onClick={() => setPlaying(null)} className="absolute right-4 top-4 grid size-10 place-items-center rounded-full bg-white/10 text-white" aria-label="Close video">
+            <X size={20} />
+          </button>
+          <video src={playing.videoUrl} controls autoPlay playsInline className="max-h-[80vh] max-w-full rounded-2xl bg-black" onClick={(e) => e.stopPropagation()} />
+          <p className="mt-3 text-sm text-white/90">#{playing.designNumber} · <span className="font-medium text-gold-400">AI generated video</span></p>
+        </div>
+      )}
+      {aiFor && (() => {
+        const live = samples.find((x) => x.id === aiFor.id) || aiFor;
+        const ph = samplePhotos(live);
+        const original = ph.find((u) => !live.aiImages?.includes(u)) || ph[0];
+        return (
+          <AiStudio
+            sourceUrl={original}
+            designNumber={live.designNumber}
+            aiPhotos={live.aiImages || []}
+            videoUrl={live.videoUrl}
+            canSave={canEdit(live)}
+            onAddPhoto={async (url, asCover) => {
+              const rest = ph.filter((u) => u !== url);
+              const list = asCover ? [url, ...rest] : [...rest, url];
+              await updateDoc(doc(db, 'samples', live.id), { sampleImages: list, imageUrl: list[0], aiImages: Array.from(new Set([...(live.aiImages || []), url])) });
+            }}
+            onSaveVideo={async (url) => {
+              await updateDoc(doc(db, 'samples', live.id), { videoUrl: url });
+            }}
+            onClose={() => setAiFor(null)}
+          />
+        );
+      })()}
+    </>
+  );
+}
 
-      </div>
-    </div>
+function IconBtn({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`grid h-9 place-items-center rounded-full border border-line ${danger ? 'text-red-700 hover:bg-red-50' : 'text-leaf-800 hover:bg-leaf-50'}`}
+    >
+      {children}
+    </button>
   );
 }

@@ -1,1025 +1,503 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  Search, Phone, MessageCircle, FileText, Images, Trash2, RotateCcw, Download, Loader2, Package, CalendarDays, IndianRupee, Layers, MapPin, ChevronDown,
+} from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDoc, where, getDocs } from 'firebase/firestore';
+import { useAuth } from '@/lib/auth';
+import { useOrders, useSamples } from '@/lib/hooks';
+import { useSettings } from '@/lib/settings';
+import { cldThumb, digitsOnly, formatDate, inr, tsToDate } from '@/lib/format';
+import { displayOrderId, getOrderLines, orderCategory, orderSeller, orderStatus, ORDER_STATUSES, STATUS_STYLE } from '@/lib/orders';
+import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
+import { useStaffList } from '@/lib/staff';
+import type { PublicStaff } from '@/lib/types';
+import { allSamplePhotos } from '@/lib/samples';
+import type { Order, OrderStatus } from '@/lib/types';
+import PageHeader from '@/components/admin/PageHeader';
+import InvoiceModal from '@/components/admin/InvoiceModal';
+import Lightbox from '@/components/Lightbox';
 
-export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [logoBase64, setLogoBase64] = useState<string>('');
+type Tab = 'All' | OrderStatus | 'Trash';
+type Range = 'all' | 'today' | '7d' | 'month';
 
-  // Search & Filter States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchMode, setSearchMode] = useState<'orderId' | 'firmName' | 'designNumber' | 'city' | 'mobile'>('orderId');
-  const [statusFilter, setStatusFilter] = useState('All');
+function inRange(d: Date | null, r: Range) {
+  if (r === 'all') return true;
+  if (!d) return r === 'today'; // just-created orders have no server time yet
+  const now = new Date();
+  if (r === 'today') return d.toDateString() === now.toDateString();
+  if (r === '7d') return now.getTime() - d.getTime() <= 7 * 864e5;
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
 
-  // Multi-Selection State
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+export default function OrdersPage() {
+  const { can, profile } = useAuth();
+  const myUid = profile?.uid || '';
+  const seeAll = can('viewAllOrders'); // Super Admin, or a Sub Admin given this power
+  const manageAll = can('manageAllOrders');
+  const canManage = (o: Order) => manageAll || (!!myUid && o.salesPersonUid === myUid);
+  const { orders: myOrders, loading, error } = useOrders(); // Admin: only their own orders
+  const staffList = useStaffList(seeAll);
+  const [staffFilter, setStaffFilter] = useState(''); // '' = everyone, 'unassigned', or a uid
+  const [catFilter, setCatFilter] = useState('');
+  const orders = useMemo(
+    () =>
+      myOrders.filter((o) => {
+        if (catFilter && normCategory(orderCategory(o)) !== catFilter) return false;
+        if (!seeAll || !staffFilter) return true;
+        const s = orderSeller(o);
+        return staffFilter === 'unassigned' ? !s.uid : s.uid === staffFilter;
+      }),
+    [myOrders, catFilter, staffFilter, seeAll],
+  );
+  const { samples } = useSamples();
+  const settings = useSettings();
 
-  // Gallery Modal State
-  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
-  const [currentGalleryImages, setCurrentGalleryImages] = useState<string[]>([]);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [galleryDesignNo, setGalleryDesignNo] = useState('');
+  const [tab, setTab] = useState<Tab>('All');
+  const [q, setQ] = useState('');
+  const [range, setRange] = useState<Range>('all');
+  const [sel, setSel] = useState<string[]>([]);
+  const [invoice, setInvoice] = useState<Order | null>(null);
+  const [gallery, setGallery] = useState<{ images: string[]; index: number } | null>(null);
 
-  const invoiceRef = useRef<HTMLDivElement>(null);
+  // ---------- stats (exclude trash & cancelled)
+  const live = orders.filter((o) => !o.isTrashed && orderStatus(o) !== 'Cancelled');
+  const today = live.filter((o) => inRange(tsToDate(o.createdAt), 'today'));
+  const stats = [
+    { label: 'Open orders', value: String(live.filter((o) => ['Pending', 'Dispatched'].includes(orderStatus(o))).length), icon: Package, tone: 'text-leaf-700' },
+    { label: "Today's orders", value: String(today.length), icon: CalendarDays, tone: 'text-gold-600' },
+    { label: 'Pieces sold', value: `${live.reduce((a, o) => a + Number(o.totalQuantity || 0), 0).toLocaleString('en-IN')} pcs`, icon: Layers, tone: 'text-sky-700' },
+    { label: 'Sales value', value: inr(live.reduce((a, o) => a + Number(o.totalAmount || 0), 0)), icon: IndianRupee, tone: 'text-leaf-700' },
+  ];
 
-  // High-Res Logo URL
-  const GFIVE_LOGO_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-9AdJ4aF84PW7lWlDW1mJweHreNhFnUsvDMKlRhnT&s';
-
-  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
-    if (!imageUrl) return '';
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(imageUrl);
-        reader.readAsDataURL(blob);
-      });
-    } catch (err) {
-      console.warn('Base64 Conversion failed:', err);
-      return imageUrl;
-    }
-  };
-
-  useEffect(() => {
-    getBase64ImageFromUrl(GFIVE_LOGO_URL).then((b64) => setLogoBase64(b64));
-
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const orderData = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-
-      orderData.sort((a: any, b: any) => {
-        const statusA = a.status || 'Pending';
-        const statusB = b.status || 'Pending';
-
-        const isInactiveA = statusA === 'Completed' || statusA === 'Cancelled';
-        const isInactiveB = statusB === 'Completed' || statusB === 'Cancelled';
-
-        if (isInactiveA && !isInactiveB) return 1;
-        if (!isInactiveA && isInactiveB) return -1;
-        return 0;
-      });
-
-      setOrders(orderData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching orders: ", error);
-      setLoading(false);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { All: 0, Trash: 0 };
+    ORDER_STATUSES.forEach((s) => (c[s] = 0));
+    orders.forEach((o) => {
+      if (o.isTrashed) c.Trash++;
+      else {
+        c.All++;
+        c[orderStatus(o)]++;
+      }
     });
+    return c;
+  }, [orders]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const handleOpenGalleryModal = async (order: any) => {
-    setGalleryDesignNo(order.designNumber || '');
-    let mainSamples: string[] = [];
-    let customColorPhotos: string[] = [];
-    let sampleData: any = null;
-
-    try {
-      if (order.sampleId) {
-        const sSnap = await getDoc(doc(db, 'samples', order.sampleId));
-        if (sSnap.exists()) {
-          sampleData = sSnap.data();
-        }
+  const shown = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const termDigits = digitsOnly(term);
+    const list = orders.filter((o) => {
+      if (tab === 'Trash' ? !o.isTrashed : o.isTrashed) return false;
+      if (tab !== 'All' && tab !== 'Trash' && orderStatus(o) !== tab) return false;
+      if (!inRange(tsToDate(o.createdAt), range)) return false;
+      if (!term) return true;
+      const id = displayOrderId(o);
+      if (/^#?\d+$/.test(term)) {
+        // pure number: order no. exact, or mobile contains
+        return digitsOnly(id) === termDigits || digitsOnly(o.mobile).includes(termDigits);
       }
+      const hay = [id, o.firmName, o.city, o.mobile, o.agentName, o.gstNo, ...getOrderLines(o).map((l) => l.designNumber)].join(' ').toLowerCase();
+      return hay.includes(term);
+    });
+    // open orders first, then newest
+    const rank = (o: Order) => (['Completed', 'Cancelled'].includes(orderStatus(o)) ? 1 : 0);
+    return list.sort((a, b) => rank(a) - rank(b));
+  }, [orders, tab, q, range]);
 
-      if (!sampleData && order.designNumber) {
-        const q = query(collection(db, 'samples'), where('designNumber', '==', String(order.designNumber)));
-        const qSnap = await getDocs(q);
-        if (!qSnap.empty) {
-          sampleData = qSnap.docs[0].data();
-        }
-      }
+  const selectable = shown.filter(canManage);
+  const allSel = selectable.length > 0 && selectable.every((o) => sel.includes(o.id));
 
-      if (sampleData) {
-        if (sampleData.sampleImages && Array.isArray(sampleData.sampleImages) && sampleData.sampleImages.length > 0) {
-          mainSamples = sampleData.sampleImages.filter((u: string) => typeof u === 'string' && u.trim() !== '');
-        } else if (sampleData.imageUrl) {
-          mainSamples = [sampleData.imageUrl];
-        }
-
-        if (sampleData.colorDetails && Array.isArray(sampleData.colorDetails)) {
-          sampleData.colorDetails.forEach((cd: any) => {
-            if (cd.photoUrl && cd.photoUrl.trim() !== '' && !mainSamples.includes(cd.photoUrl)) {
-              customColorPhotos.push(cd.photoUrl);
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('Error fetching sample images:', err);
-    }
-
-    if (mainSamples.length === 0) {
-      if (order.colorPhotos) {
-        Object.values(order.colorPhotos).forEach((u: any) => {
-          if (typeof u === 'string' && u.trim() !== '') {
-            customColorPhotos.push(u);
-          }
-        });
-      }
-    }
-
-    const finalSequence = Array.from(new Set([...mainSamples, ...customColorPhotos]));
-
-    if (finalSequence.length === 0) {
-      alert('No preview photos found for this design.');
-      return;
-    }
-
-    setCurrentGalleryImages(finalSequence);
-    setActiveImageIndex(0);
-    setGalleryModalOpen(true);
+  const bulk = async (fn: (id: string, b: ReturnType<typeof writeBatch>) => void) => {
+    const b = writeBatch(db);
+    sel.forEach((id) => fn(id, b));
+    await b.commit();
+    setSel([]);
   };
 
-  const toggleSelectOrder = (id: string) => {
-    setSelectedOrderIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  const openGallery = (o: Order) => {
+    const imgs: string[] = [];
+    getOrderLines(o).forEach((l) => {
+      const s = samples.find((x) => x.id === l.sampleId) || samples.find((x) => String(x.designNumber) === l.designNumber);
+      if (s) imgs.push(...allSamplePhotos(s));
+      else {
+        if (l.image) imgs.push(l.image);
+        imgs.push(...Object.values(l.colorPhotos));
+      }
+    });
+    const uniq = Array.from(new Set(imgs.filter(Boolean)));
+    if (!uniq.length) return alert('No photos found for this order.');
+    setGallery({ images: uniq, index: 0 });
+  };
+
+  const exportCsv = () => {
+    const rows = [['Order No', 'Date', 'Status', 'Sales Person', 'Category', 'Firm', 'Mobile', 'City', 'GSTIN', 'Agent', 'Design', 'Colour', 'Qty', 'Rate', 'Amount', 'Sample Added By', 'Remarks']];
+    shown.forEach((o) =>
+      getOrderLines(o).forEach((l) =>
+        Object.entries(l.items).forEach(([c, qn]) =>
+          rows.push([
+            displayOrderId(o), formatDate(tsToDate(o.createdAt)), orderStatus(o), orderSeller(o).name, categoryName(l.category || orderCategory(o)),
+            o.firmName, o.mobile, o.city, o.gstNo || '', o.agentName || '',
+            l.designNumber, c, String(qn), String(l.price), String(qn * l.price), o.sampleCreatorName || '', o.remarks || '',
+          ]),
+        ),
+      ),
     );
+    const csv = rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gfive-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleSelectAll = (filteredIds: string[]) => {
-    const allSelected = filteredIds.every((id) => selectedOrderIds.includes(id));
-    if (allSelected) {
-      setSelectedOrderIds([]);
-    } else {
-      setSelectedOrderIds(filteredIds);
-    }
-  };
-
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    try {
-      const docRef = doc(db, 'orders', orderId);
-      await updateDoc(docRef, { status: newStatus });
-    } catch (err) {
-      console.error('Failed to update status:', err);
-    }
-  };
-
-  const handleMoveToTrash = async (orderId: string) => {
-    try {
-      const docRef = doc(db, 'orders', orderId);
-      await updateDoc(docRef, { isTrashed: true });
-    } catch (err) {
-      console.error('Failed to move to trash:', err);
-    }
-  };
-
-  const handleRestoreFromTrash = async (orderId: string) => {
-    try {
-      const docRef = doc(db, 'orders', orderId);
-      await updateDoc(docRef, { isTrashed: false });
-    } catch (err) {
-      console.error('Failed to restore order:', err);
-    }
-  };
-
-  const handlePermanentDelete = async (orderId: string, displayOrderId: string) => {
-    if (confirm(`⚠️ Permanently delete order ${displayOrderId}?`)) {
-      try {
-        await deleteDoc(doc(db, 'orders', orderId));
-      } catch (err) {
-        console.error('Failed to permanently delete order:', err);
-      }
-    }
-  };
-
-  const handleBulkMoveToTrash = async () => {
-    if (selectedOrderIds.length === 0) return;
-    if (confirm(`Move ${selectedOrderIds.length} selected order(s) to Trash?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedOrderIds.forEach((id) => {
-          const docRef = doc(db, 'orders', id);
-          batch.update(docRef, { isTrashed: true });
-        });
-        await batch.commit();
-        setSelectedOrderIds([]);
-      } catch (err) {
-        console.error('Bulk trash failed:', err);
-      }
-    }
-  };
-
-  const handleBulkRestore = async () => {
-    if (selectedOrderIds.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      selectedOrderIds.forEach((id) => {
-        const docRef = doc(db, 'orders', id);
-        batch.update(docRef, { isTrashed: false });
-      });
-      await batch.commit();
-      setSelectedOrderIds([]);
-    } catch (err) {
-      console.error('Bulk restore failed:', err);
-    }
-  };
-
-  const handleBulkPermanentDelete = async () => {
-    if (selectedOrderIds.length === 0) return;
-    if (confirm(`⚠️ Permanently delete ${selectedOrderIds.length} selected order(s)?`)) {
-      try {
-        const batch = writeBatch(db);
-        selectedOrderIds.forEach((id) => {
-          const docRef = doc(db, 'orders', id);
-          batch.delete(docRef);
-        });
-        await batch.commit();
-        setSelectedOrderIds([]);
-      } catch (err) {
-        console.error('Bulk delete failed:', err);
-      }
-    }
-  };
-
-  const loadHtml2Pdf = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      if ((window as any).html2pdf) {
-        resolve((window as any).html2pdf);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = () => resolve((window as any).html2pdf);
-      script.onerror = () => reject('Failed to load html2pdf script');
-      document.body.appendChild(script);
-    });
-  };
-
-  const handleDownloadInvoice = async (order: any) => {
-    setSelectedOrder(order);
-    setIsGeneratingPdf(true);
-
-    setTimeout(async () => {
-      try {
-        const html2pdf = await loadHtml2Pdf();
-        const element = invoiceRef.current;
-
-        if (element) {
-          const displayOrderId = order.orderId || `GFive#${order.id.substring(0, 5)}`;
-          const fileName = `${displayOrderId.replace('#', '_')}.pdf`;
-
-          const opt = {
-            margin: 0.15,
-            filename: fileName,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-              scale: 2, 
-              useCORS: true, 
-              allowTaint: true,
-              windowWidth: 800, // Phone browser viewport width fix
-              scrollX: 0,
-              scrollY: 0
-            },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-          };
-
-          await html2pdf().from(element).set(opt).save();
-        }
-      } catch (err) {
-        console.error('Invoice PDF Download Failed:', err);
-      } finally {
-        setIsGeneratingPdf(false);
-      }
-    }, 500);
-  };
-
-  const handlePrintInvoice = async (order: any) => {
-    setSelectedOrder(order);
-    setTimeout(() => {
-      if (invoiceRef.current) {
-        const printHtml = invoiceRef.current.innerHTML;
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <title>Invoice_${order.orderId || order.id}</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                  * { box-sizing: border-box; }
-                  body { margin: 0; padding: 15px; font-family: Arial, sans-serif; background: #ffffff; color: #000000; }
-                  img { max-width: 100% !important; height: 100px !important; display: inline-block; }
-                  table { width: 100%; border-collapse: collapse; }
-                  th, td { border-bottom: 1px solid #ddd; padding: 8px; }
-                  @media print {
-                    @page { margin: 0.3in; size: auto; }
-                    body { padding: 0; }
-                  }
-                </style>
-              </head>
-              <body>
-                ${printHtml}
-                <script>
-                  window.onload = function() {
-                    setTimeout(function() {
-                      window.print();
-                      window.close();
-                    }, 500);
-                  };
-                </script>
-              </body>
-            </html>
-          `);
-          printWindow.document.close();
-        } else {
-          // Mobile Fallback agar popup blocked ho
-          window.print();
-        }
-      }
-    }, 400);
-  };
-
-  const filteredOrders = orders.filter((order) => {
-    const isTrashed = !!order.isTrashed;
-
-    if (statusFilter === 'Trash') {
-      if (!isTrashed) return false;
-    } else {
-      if (isTrashed) return false;
-      const currentStatus = order.status || 'Pending';
-      if (statusFilter !== 'All' && currentStatus !== statusFilter) {
-        return false;
-      }
-    }
-
-    const rawSearch = searchTerm.trim().toLowerCase();
-    if (rawSearch !== '') {
-      if (searchMode === 'orderId') {
-        const fullOrderIdStr = order.orderId || `GFive#${order.id.substring(0, 5)}`;
-        const orderDigitsOnly = fullOrderIdStr.replace(/\D/g, '');
-        const cleanQuery = rawSearch.replace(/\D/g, '');
-
-        if (cleanQuery === '') return false;
-        return orderDigitsOnly.includes(cleanQuery);
-      } else if (searchMode === 'firmName') {
-        return (order.firmName || '').toLowerCase().includes(rawSearch);
-      } else if (searchMode === 'designNumber') {
-        return String(order.designNumber || '').toLowerCase().includes(rawSearch);
-      } else if (searchMode === 'city') {
-        return (order.city || '').toLowerCase().includes(rawSearch);
-      } else if (searchMode === 'mobile') {
-        return (order.mobile || '').toLowerCase().includes(rawSearch);
-      }
-    }
-
-    return true;
-  });
-
-  const filteredOrderIds = filteredOrders.map((o) => o.id);
-  const isAllFilteredSelected = filteredOrderIds.length > 0 && filteredOrderIds.every((id) => selectedOrderIds.includes(id));
-
-  const todayDateStr = new Date().toDateString();
-  const activeValidOrders = orders.filter((o) => !o.isTrashed && o.status !== 'Cancelled');
-  const todayOrders = activeValidOrders.filter((o) => o.createdAt?.toDate && o.createdAt.toDate().toDateString() === todayDateStr);
-  const totalRevenue = activeValidOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
-  const totalPieces = activeValidOrders.reduce((sum, o) => sum + Number(o.totalQuantity || 0), 0);
-  const trashCount = orders.filter((o) => !!o.isTrashed).length;
-
-  if (loading) {
-    return <div style={{ padding: '60px', textAlign: 'center', color: '#0f172a', fontWeight: 'bold' }}>Loading Live Orders...</div>;
-  }
+  const TABS: Tab[] = ['All', ...ORDER_STATUSES, 'Trash'];
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f8fafc',
-      padding: '24px 14px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <>
+      <PageHeader
+        eyebrow="Live"
+        title="Orders"
+        subtitle={seeAll ? 'Orders of every Sales Person. Use the filters to see one Sales Person.' : 'Only orders from the links you shared are shown here.'}
+        actions={
+          <button className="btn btn-outline" onClick={exportCsv} disabled={!shown.length}>
+            <Download size={16} /> Export CSV
+          </button>
+        }
+      />
 
-        {/* Top Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              📊 Orders Dashboard
-            </h1>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>
-              Realtime customer orders & PDF invoice manager
-            </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.map(({ label, value, icon: Icon, tone }) => (
+          <div key={label} className="card p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-[0.12em] text-muted">{label}</span>
+              <Icon size={17} className={tone} />
+            </div>
+            <p className={`mt-2 font-display text-[30px] font-semibold leading-none ${tone}`}>{value}</p>
           </div>
-        </div>
-
-        {/* Sales Summary Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Active Orders</div>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{activeValidOrders.length}</div>
-          </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Today's Orders</div>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563eb', marginTop: '4px' }}>{todayOrders.length}</div>
-          </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Total Quantity Sold</div>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#0891b2', marginTop: '4px' }}>{totalPieces} pcs</div>
-          </div>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 18px' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Total Sales Amount</div>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#16a34a', marginTop: '4px' }}>₹{totalRevenue.toLocaleString()}</div>
-          </div>
-        </div>
-
-        {/* Search & Filters */}
-        <div style={{ background: '#ffffff', padding: '14px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-          
-          <div style={{ flex: '1 1 320px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <select
-              value={searchMode}
-              onChange={(e: any) => {
-                setSearchMode(e.target.value);
-                setSearchTerm('');
-              }}
-              style={{
-                padding: '10px 12px',
-                borderRadius: '10px',
-                border: '2px solid #cbd5e1',
-                fontSize: '13px',
-                fontWeight: '800',
-                background: '#f8fafc',
-                color: '#0f172a',
-                outline: 'none'
-              }}
-            >
-              <option value="orderId">🔢 Order ID</option>
-              <option value="firmName">🏢 Company / Firm Name</option>
-              <option value="designNumber">👗 Design No.</option>
-              <option value="city">🏙️ City</option>
-              <option value="mobile">📞 Mobile No.</option>
-            </select>
-
-            <input
-              type="text"
-              placeholder={
-                searchMode === 'orderId' ? "Enter Order ID (e.g. 16)" :
-                searchMode === 'firmName' ? "Enter Firm Name..." :
-                searchMode === 'designNumber' ? "Enter Design Number..." :
-                searchMode === 'city' ? "Enter City Name..." : "Enter Mobile Number..."
-              }
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '2px solid #cbd5e1',
-                fontSize: '14px',
-                fontWeight: '700',
-                color: '#000000',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {['All', 'Pending', 'Dispatched', 'Completed', 'Cancelled', 'Trash'].map((status) => (
-              <button
-                key={status}
-                onClick={() => {
-                  setStatusFilter(status);
-                  setSelectedOrderIds([]);
-                }}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: statusFilter === status ? (status === 'Trash' ? '#dc2626' : '#0f172a') : '#f1f5f9',
-                  color: statusFilter === status ? '#ffffff' : status === 'Trash' ? '#dc2626' : '#475569'
-                }}
-              >
-                {status === 'All' ? 'All' :
-                 status === 'Pending' ? '⏳ Pending' :
-                 status === 'Dispatched' ? '🚚 Dispatched' :
-                 status === 'Completed' ? '✅ Completed' :
-                 status === 'Cancelled' ? '❌ Cancelled' :
-                 `🗑️ Trash (${trashCount})`}
-              </button>
-            ))}
-          </div>
-
-        </div>
-
-        {/* Bulk Selection Bar */}
-        {filteredOrders.length > 0 && (
-          <div style={{ background: '#ffffff', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-              <input
-                type="checkbox"
-                checked={isAllFilteredSelected}
-                onChange={() => handleSelectAll(filteredOrderIds)}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563eb' }}
-              />
-              Select All Shown ({filteredOrders.length})
-            </label>
-
-            {selectedOrderIds.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#2563eb', background: '#dbeafe', padding: '4px 10px', borderRadius: '6px' }}>
-                  {selectedOrderIds.length} Selected
-                </span>
-
-                {statusFilter === 'Trash' ? (
-                  <>
-                    <button onClick={handleBulkRestore} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      🔄 Restore Selected
-                    </button>
-                    <button onClick={handleBulkPermanentDelete} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      💥 Delete Permanently
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={handleBulkMoveToTrash} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                    🗑️ Move Selected to Trash
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Orders List */}
-        {filteredOrders.length === 0 ? (
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '40px', textAlign: 'center', color: '#ef4444', fontWeight: '700' }}>
-            No matching orders found.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {filteredOrders.map((order) => {
-              const currentStatus = order.status || 'Pending';
-              const isCompleted = currentStatus === 'Completed';
-              const isCancelled = currentStatus === 'Cancelled';
-              const isTrashed = !!order.isTrashed;
-              const isSelected = selectedOrderIds.includes(order.id);
-              const displayOrderId = order.orderId || `GFive#${order.id.substring(0, 5)}`;
-
-              const formattedDate = order.createdAt?.toDate 
-                ? order.createdAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                : 'Just now';
-
-              return (
-                <div 
-                  key={order.id} 
-                  style={{
-                    background: isSelected ? '#eff6ff' : isTrashed ? '#fff1f2' : isCancelled ? '#fef2f2' : isCompleted ? '#f1f5f9' : '#ffffff',
-                    opacity: isTrashed ? 0.75 : isCancelled ? 0.65 : isCompleted ? 0.85 : 1,
-                    borderRadius: '16px',
-                    padding: '18px',
-                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectOrder(order.id)}
-                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563eb' }}
-                      />
-                      <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Order ID:</span>
-                      <span style={{ fontSize: '16px', fontWeight: '800', color: '#2563eb' }}>
-                        {displayOrderId}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>{formattedDate}</span>
-
-                      {!isTrashed && (
-                        <select
-                          value={currentStatus}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            fontSize: '13px',
-                            fontWeight: '800',
-                            border: 'none',
-                            cursor: 'pointer',
-                            outline: 'none',
-                            background: currentStatus === 'Pending' ? '#fef3c7' : currentStatus === 'Dispatched' ? '#dbeafe' : currentStatus === 'Completed' ? '#dcfce7' : '#fee2e2',
-                            color: currentStatus === 'Pending' ? '#92400e' : currentStatus === 'Dispatched' ? '#1e40af' : currentStatus === 'Completed' ? '#15803d' : '#b91c1c'
-                          }}
-                        >
-                          <option value="Pending">⏳ Pending</option>
-                          <option value="Dispatched">🚚 Dispatched</option>
-                          <option value="Completed">✅ Completed</option>
-                          <option value="Cancelled">❌ Cancelled</option>
-                        </select>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '14px' }}>
-                    <div>
-                      <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '16px' }}>{order.firmName}</div>
-                      <div style={{ color: '#475569', marginTop: '2px' }}>📞 {order.mobile} | 🏙️ {order.city}</div>
-                      {order.gstNo && <div style={{ color: '#64748b', fontSize: '12px' }}>GST: {order.gstNo}</div>}
-                      {order.agentName && <div style={{ color: '#64748b', fontSize: '12px' }}>Agent: {order.agentName}</div>}
-                    </div>
-
-                    <div>
-                      <div style={{ color: '#0f172a', fontWeight: '700' }}>Design #{order.designNumber}</div>
-                      <div style={{ color: '#16a34a', fontWeight: '800', fontSize: '15px', marginTop: '2px' }}>
-                        {order.totalQuantity} pcs • ₹{order.totalAmount?.toLocaleString()}
-                      </div>
-                      {order.remarks && <div style={{ color: '#ef4444', fontSize: '12px', fontStyle: 'italic', marginTop: '2px' }}>Note: {order.remarks}</div>}
-                    </div>
-                  </div>
-
-                  {/* Quantities Badges */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', background: '#f8fafc', padding: '10px', borderRadius: '10px' }}>
-                    {order.items && Object.entries(order.items).map(([color, qty]: [string, any]) => {
-                      if (qty <= 0) return null;
-                      const colorPhoto = order.colorPhotos?.[color] || '';
-
-                      return (
-                        <span key={color} style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {colorPhoto && <img src={colorPhoto} alt={color} style={{ width: '18px', height: '18px', borderRadius: '4px', objectFit: 'cover' }} />}
-                          {color}: {qty} pcs
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* BOTTOM ACTION BUTTONS */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '8px' }}>
-                    {isTrashed ? (
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => handleRestoreFromTrash(order.id)} style={{ background: '#16a34a', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                          🔄 Restore
-                        </button>
-                        <button onClick={() => handlePermanentDelete(order.id, displayOrderId)} style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                          💥 Permanent Delete
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => handleMoveToTrash(order.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
-                        🗑️ Move to Trash
-                      </button>
-                    )}
-
-                    {!isTrashed && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenGalleryModal(order)}
-                          style={{
-                            background: '#2563eb',
-                            color: '#ffffff',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
-                          }}
-                        >
-                          📷 View Samples
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handlePrintInvoice(order)}
-                          style={{
-                            background: '#e2e8f0',
-                            color: '#0f172a',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          🖨️ Print
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadInvoice(order)}
-                          disabled={isGeneratingPdf && selectedOrder?.id === order.id}
-                          style={{
-                            background: '#0f172a',
-                            color: '#ffffff',
-                            padding: '10px 18px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          {isGeneratingPdf && selectedOrder?.id === order.id ? '📄 Generating...' : `📄 Invoice (${displayOrderId})`}
-                        </button>
-                      </div>
-                    )}
-
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
+        ))}
       </div>
 
-      {/* SAMPLE PREVIEW SWIPE GALLERY MODAL */}
-      {galleryModalOpen && currentGalleryImages.length > 0 && (
-        <div 
-          onClick={() => setGalleryModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.92)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px'
-          }}
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'relative',
-              maxWidth: '520px',
-              width: '100%',
-              background: '#0f172a',
-              borderRadius: '24px',
-              padding: '20px',
-              color: '#ffffff',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
-                  Design #{galleryDesignNo} Samples
-                </h3>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  Image {activeImageIndex + 1} of {currentGalleryImages.length}
-                </span>
-              </div>
-              <button
-                onClick={() => setGalleryModalOpen(false)}
-                style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '36px',
-                  height: '36px',
-                  fontSize: '18px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                ✕
-              </button>
+      {/* toolbar */}
+      <div className="card mt-6 p-3">
+        <div className="flex flex-col gap-3 md:flex-row">
+          <div className="relative flex-1">
+            <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input className="input pl-10" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order no. (e.g. 22), firm, design, city or mobile" />
+          </div>
+          {seeAll && (
+            <div className="relative">
+              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-48" aria-label="Sales Person">
+                <option value="">All Sales Persons</option>
+                {staffList.map((s) => (
+                  <option key={s.uid} value={s.uid}>{s.name}</option>
+                ))}
+                <option value="unassigned">Unassigned (old orders)</option>
+              </select>
+              <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
             </div>
+          )}
+          <div className="relative">
+            <select value={catFilter} onChange={(e) => { setCatFilter(e.target.value); setSel([]); }} className="input appearance-none pr-9 md:w-44" aria-label="Category">
+              <option value="">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+          </div>
+          <div className="relative">
+            <select aria-label="Date range" value={range} onChange={(e) => setRange(e.target.value as Range)} className="input appearance-none pr-9 md:w-44">
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="month">This month</option>
+            </select>
+            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setSel([]); }}
+              className={`chip shrink-0 ${tab === t ? (t === 'Trash' ? '!border-red-700 !bg-red-700 !text-white' : 'chip-active') : ''}`}
+            >
+              {t !== 'All' && t !== 'Trash' && <span className={`size-2 rounded-full ${STATUS_STYLE[t].dot}`} />}
+              {t === 'Trash' && <Trash2 size={13} />}
+              {t} <span className="opacity-60">{counts[t] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-            <div style={{ position: 'relative', width: '100%', height: '360px', background: '#000000', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img
-                src={currentGalleryImages[activeImageIndex]}
-                alt={`Sample ${activeImageIndex + 1}`}
-                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-              />
-
-              {currentGalleryImages.length > 1 && (
-                <button
-                  onClick={() => setActiveImageIndex((prev) => (prev === 0 ? currentGalleryImages.length - 1 : prev - 1))}
-                  style={{
-                    position: 'absolute',
-                    left: '10px',
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '50%',
-                    width: '40px',
-                    height: '40px',
-                    fontSize: '20px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ❮
-                </button>
-              )}
-
-              {currentGalleryImages.length > 1 && (
-                <button
-                  onClick={() => setActiveImageIndex((prev) => (prev === currentGalleryImages.length - 1 ? 0 : prev + 1))}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '50%',
-                    width: '40px',
-                    height: '40px',
-                    fontSize: '20px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ❯
-                </button>
-              )}
-            </div>
-
-            {currentGalleryImages.length > 1 && (
-              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', marginTop: '14px', paddingBottom: '6px' }}>
-                {currentGalleryImages.map((imgUrl, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => setActiveImageIndex(idx)}
-                    style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '10px',
-                      overflow: 'hidden',
-                      border: activeImageIndex === idx ? '2.5px solid #3b82f6' : '1px solid #334155',
-                      opacity: activeImageIndex === idx ? 1 : 0.6,
-                      cursor: 'pointer',
-                      flexShrink: 0
+      {shown.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-leaf-700" checked={allSel} onChange={() => setSel(allSel ? [] : selectable.map((o) => o.id))} />
+            Select all ({shown.length})
+          </label>
+          {sel.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-leaf-800">{sel.length} selected</span>
+              {tab === 'Trash' ? (
+                <>
+                  <button className="btn btn-sm btn-outline" onClick={() => bulk((id, b) => b.update(doc(db, 'orders', id), { isTrashed: false }))}>
+                    <RotateCcw size={14} /> Restore
+                  </button>
+                  {can('deleteOrders') && (
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={() => confirm(`Permanently delete ${sel.length} order(s)?`) && bulk((id, b) => b.delete(doc(db, 'orders', id)))}
+                    >
+                      Delete forever
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <select
+                    aria-label="Change status of selected orders"
+                    className="h-9 rounded-full border border-line bg-white px-3 text-sm"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const v = e.target.value as OrderStatus;
+                      if (v) bulk((id, b) => b.update(doc(db, 'orders', id), { status: v }));
+                      e.target.value = '';
                     }}
                   >
-                    <img src={imgUrl} alt="thumb" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ))}
-              </div>
-            )}
-
-          </div>
+                    <option value="" disabled>Set status…</option>
+                    {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <button className="btn btn-sm btn-outline !text-red-700" onClick={() => confirm(`Move ${sel.length} order(s) to trash?`) && bulk((id, b) => b.update(doc(db, 'orders', id), { isTrashed: true }))}>
+                    <Trash2 size={14} /> Trash
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* PRINTABLE INVOICE TEMPLATE */}
-      {selectedOrder && (
-        <div style={{ position: 'fixed', top: '-10000px', left: 0, width: '750px', zIndex: -1000, pointerEvents: 'none', opacity: 1 }}>
-          <div ref={invoiceRef} style={{ width: '750px', padding: '30px', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#1e293b', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
-              <div>
-                <div style={{ fontSize: '32px', fontWeight: 'bold', letterSpacing: '1px', color: '#1e293b' }}>Sales order</div>
-                <div style={{ fontSize: '13px', color: '#475569', marginTop: '8px', fontWeight: 'bold' }}>Gfive Designer Studio Pvt Ltd </div>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>info@gfive.co.in | www.gfive.co.in</div>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>GST no -19AJCG3693D1ZD</div>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>113, Park Street, Kol-16 </div>
-              </div>
-
-              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <div style={{ width: '300px', height: '120px', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <img 
-                    src={logoBase64 || GFIVE_LOGO_URL} 
-                    alt="GFive Logo" 
-                    style={{ width: '100%', height: '100px', objectFit: 'contain' }} 
-                  />
-                </div>
-                <div style={{ fontSize: '13px', marginTop: '2px' }}>
-                  <strong>S.A. No:</strong> {selectedOrder.orderId || `GFive#${selectedOrder.id.substring(0, 5)}`}
-                </div>
-                <div style={{ fontSize: '13px' }}>
-                  <strong>S.A. date:</strong> {selectedOrder.createdAt?.toDate ? selectedOrder.createdAt.toDate().toLocaleDateString('en-GB') : 'Today'}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '24px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Billing Address</div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.firmName}</div>
-                            <div style={{ fontSize: '13px', color: '#334155' }}>Design No.: {selectedOrder.designNumber}</div>
-
-              <div style={{ fontSize: '13px', color: '#334155' }}>Phone: {selectedOrder.mobile} | City: {selectedOrder.city}</div>
-              {selectedOrder.gstNo && <div style={{ fontSize: '13px', color: '#334155' }}>GST: {selectedOrder.gstNo}</div>}
-              {selectedOrder.agentName && <div style={{ fontSize: '13px', color: '#334155' }}>Agent: {selectedOrder.agentName}</div>}
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', textAlign: 'left' }}>
-                  <th style={{ padding: '10px' }}>Item / Design</th>
-                  <th style={{ padding: '10px' }}>Color Name</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Color Preview</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Qty</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Rate</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedOrder.items && Object.entries(selectedOrder.items).map(([col, qty]: [string, any], index: number) => {
-                  if (qty <= 0) return null;
-                  const photoUrl = selectedOrder.colorPhotos?.[col] || '';
-
-                  return (
-                    <tr key={col} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      {index === 0 ? (
-                        <td style={{ padding: '12px 10px', fontWeight: 'bold', verticalAlign: 'middle' }} rowSpan={Object.keys(selectedOrder.items).filter(k => selectedOrder.items[k] > 0).length}>
-                          <div>#{selectedOrder.designNumber}</div>
-                          {photoUrl && (
-                            <div style={{ marginTop: '6px' }}>
-                              <img 
-                                src={photoUrl} 
-                                alt={selectedOrder.designNumber} 
-                                style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }} 
-                              />
-                            </div>
-                          )}
-                        </td>
-                      ) : null}
-
-                      <td style={{ padding: '12px 10px', fontWeight: '700', color: '#1e293b', verticalAlign: 'middle' }}>
-                        {col}
-                      </td>
-
-                      <td style={{ padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        {photoUrl ? (
-                          <img 
-                            src={photoUrl} 
-                            alt={col} 
-                            style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1', display: 'inline-block' }} 
-                          />
-                        ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: '#f1f5f9', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '14px' }}>
-                            🎨
-                          </div>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle' }}>
-                        {qty} pcs
-                      </td>
-
-                      <td style={{ padding: '12px 10px', textAlign: 'right', verticalAlign: 'middle' }}>
-                        ₹{selectedOrder.price}.00/pc
-                      </td>
-
-                      <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', verticalAlign: 'middle' }}>
-                        ₹{(qty * Number(selectedOrder.price || 0)).toLocaleString()}.00
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {selectedOrder.remarks && (
-              <div style={{ marginBottom: '24px', fontSize: '13px' }}>
-                <strong>Order Changes / Remarks:</strong>
-                <div style={{ background: '#fef2f2', padding: '10px', borderRadius: '6px', marginTop: '4px', border: '1px solid #fecaca' }}>{selectedOrder.remarks}</div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #000', paddingTop: '16px', marginBottom: '40px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#15803d' }}>Thanks for your Business!</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0f172a' }}>Total: ₹{selectedOrder.totalAmount?.toLocaleString()}.00</div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '50px', fontSize: '12px', textAlign: 'center' }}>
-              <div style={{ width: '200px', borderTop: '1px solid #000', paddingTop: '8px' }}>
-                <div>{selectedOrder.firmName}</div>
-                <div style={{ fontWeight: 'bold' }}>Signature customer</div>
-              </div>
-              <div style={{ width: '200px', borderTop: '1px solid #000', paddingTop: '8px' }}>
-                <div>GFive Sales</div>
-                <div style={{ fontWeight: 'bold' }}>Signature sales manager</div>
-              </div>
-            </div>
-
+      {/* list */}
+      <div className="mt-4 space-y-4">
+        {loading ? (
+          <div className="grid place-items-center py-24"><Loader2 className="animate-spin text-leaf-700" /></div>
+        ) : error ? (
+          <div className="card p-10 text-center text-red-700">{error}</div>
+        ) : shown.length === 0 ? (
+          <div className="card p-12 text-center">
+            <p className="font-display text-2xl">No orders here</p>
+            <p className="mt-1 text-sm text-muted">{q || range !== 'all' ? 'Try clearing the search or date filter.' : 'Share sample links on WhatsApp to start getting orders.'}</p>
           </div>
-        </div>
-      )}
+        ) : (
+          shown.map((o) => (
+            <OrderCard
+              key={o.id}
+              order={o}
+              selected={sel.includes(o.id)}
+              canDelete={can('deleteOrders')}
+              canManage={canManage(o)}
+              staffList={can('reassignOrders') ? staffList : null}
+              onSelect={() => setSel((p) => (p.includes(o.id) ? p.filter((x) => x !== o.id) : [...p, o.id]))}
+              onInvoice={() => setInvoice(o)}
+              onPhotos={() => openGallery(o)}
+            />
+          ))
+        )}
+      </div>
 
-    </div>
+      {invoice && <InvoiceModal order={invoice} settings={settings} onClose={() => setInvoice(null)} />}
+      {gallery && (
+        <Lightbox images={gallery.images} index={gallery.index} onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))} onClose={() => setGallery(null)} />
+      )}
+    </>
+  );
+}
+
+function OrderCard({
+  order: o, selected, canDelete, canManage, staffList, onSelect, onInvoice, onPhotos,
+}: {
+  order: Order;
+  selected: boolean;
+  canDelete: boolean;
+  canManage: boolean; // may change status / trash (own orders, or 'Change status of all orders')
+  staffList: PublicStaff[] | null; // Super Admin only: can correct the salesperson
+  onSelect: () => void;
+  onInvoice: () => void;
+  onPhotos: () => void;
+}) {
+  const st = orderStatus(o);
+  const phone = digitsOnly(o.mobile);
+  const waPhone = phone.length === 10 ? `91${phone}` : phone;
+  const style = STATUS_STYLE[st];
+  const lines = getOrderLines(o);
+  const date = tsToDate(o.createdAt);
+  const done = st === 'Completed' || st === 'Cancelled';
+
+  return (
+    <article className={`card overflow-hidden transition ${selected ? 'ring-2 ring-leaf-600' : ''} ${done && !o.isTrashed ? 'bg-sand/40' : ''} ${o.isTrashed ? 'bg-red-50/40' : ''}`}>
+      {/* header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div className="flex items-center gap-3">
+          {canManage && <input type="checkbox" className="size-4 accent-leaf-700" checked={selected} onChange={onSelect} aria-label="Select order" />}
+          <span className="font-display text-xl font-semibold text-leaf-800">{displayOrderId(o)}</span>
+          <span className="text-xs text-muted">{date ? formatDate(date, true) : 'Just now'}</span>
+          {categoryName(orderCategory(o)) && (
+            <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-gold-600 ring-1 ring-gold-100">{categoryName(orderCategory(o))}</span>
+          )}
+        </div>
+        {!canManage ? (
+          <span className={`inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium ${style.pill}`}>
+            <span className={`size-2 rounded-full ${style.dot}`} />
+            {o.isTrashed ? 'In trash' : st}
+          </span>
+        ) : o.isTrashed ? (
+          <div className="flex gap-2">
+            <button className="btn btn-sm btn-outline" onClick={() => updateDoc(doc(db, 'orders', o.id), { isTrashed: false })}>
+              <RotateCcw size={14} /> Restore
+            </button>
+            {canDelete && (
+              <button className="btn btn-sm btn-danger" onClick={async () => {
+                if (!confirm(`Delete ${displayOrderId(o)} forever?`)) return;
+                const b = writeBatch(db);
+                b.delete(doc(db, 'orders', o.id));
+                await b.commit();
+              }}>
+                Delete
+              </button>
+            )}
+          </div>
+        ) : (
+          <label className={`relative inline-flex h-9 items-center gap-2 rounded-full border pl-3 pr-8 text-sm font-medium ${style.pill}`}>
+            <span className={`size-2 rounded-full ${style.dot}`} />
+            {st}
+            <ChevronDown size={14} className="pointer-events-none absolute right-2.5" />
+            <select
+              value={st}
+              onChange={(e) => updateDoc(doc(db, 'orders', o.id), { status: e.target.value })}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label="Change status"
+            >
+              {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+
+      <div className="grid gap-4 p-4 md:grid-cols-[240px_1fr]">
+        {/* customer */}
+        <div>
+          <p className="text-[19px] font-semibold leading-tight">{o.firmName}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted"><MapPin size={13} /> {o.city}</p>
+          <div className="mt-2 flex gap-2">
+            <a href={`tel:${o.mobile}`} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs text-leaf-800 hover:bg-leaf-50">
+              <Phone size={13} /> {o.mobile}
+            </a>
+            <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" className="grid size-8 place-items-center rounded-full bg-[#25d366] text-white" aria-label="Chat with customer on WhatsApp" title="Chat with customer">
+              <MessageCircle size={14} />
+            </a>
+          </div>
+          <div className="mt-2 space-y-0.5 text-xs text-muted">
+            {o.gstNo && <p>GSTIN: <span className="text-ink">{o.gstNo}</span></p>}
+            {o.agentName && <p>Agent: <span className="text-ink">{o.agentName}</span></p>}
+            {staffList ? (
+              <SellerPicker order={o} staffList={staffList} />
+            ) : (
+              <p>Sales Person: <span className="text-ink">{orderSeller(o).name}</span></p>
+            )}
+            {o.sampleCreatorName && <p>Sample added by: <span className="text-ink">{o.sampleCreatorName}</span></p>}
+          </div>
+          {o.remarks && <p className="mt-2 rounded-lg bg-gold-50 px-2.5 py-1.5 text-xs text-gold-600">“{o.remarks}”</p>}
+        </div>
+
+        {/* lines */}
+        <div className="space-y-2.5">
+          {lines.map((l, i) => (
+            <div key={l.designNumber + i} className="flex gap-3 rounded-xl bg-sand/50 p-2.5">
+              <button onClick={onPhotos} className="h-16 w-13 shrink-0 overflow-hidden rounded-lg bg-sand" aria-label="View photos">
+                {l.image && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={cldThumb(l.image, 104, 128)} alt="" width={52} height={64} loading="lazy" className="size-full object-cover" />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <p className="font-semibold">#{l.designNumber} <span className="text-xs font-normal text-muted">@ {inr(l.price)}/pc</span></p>
+                  <p className="text-sm font-semibold text-leaf-700">{l.totalQuantity} pcs · {inr(l.totalAmount)}</p>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {Object.entries(l.items).map(([c, qn]) => (
+                    <span key={c} className="inline-flex items-center gap-1 rounded-full border border-line bg-white py-0.5 pl-0.5 pr-2 text-xs">
+                      {l.colorPhotos[c] ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={cldThumb(l.colorPhotos[c], 40, 40)} alt="" width={20} height={20} loading="lazy" className="size-5 rounded-full object-cover" />
+                      ) : (
+                        <span className="ml-1 size-2 rounded-full bg-gold-400" />
+                      )}
+                      {c}: <b>{qn}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* footer */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-sand/30 px-4 py-3">
+        <p className="text-sm">
+          <span className="text-muted">Total </span>
+          <span className="font-semibold">{o.totalQuantity} pcs</span>
+          <span className="mx-1.5 text-line">|</span>
+          <span className="font-display text-xl font-semibold text-leaf-700">{inr(o.totalAmount)}</span>
+        </p>
+        <div className="flex gap-2">
+          {!o.isTrashed && canManage && (
+            <button className="btn btn-sm btn-ghost !text-red-700" onClick={() => updateDoc(doc(db, 'orders', o.id), { isTrashed: true })} aria-label="Move to trash">
+              <Trash2 size={15} />
+            </button>
+          )}
+          <button className="btn btn-sm btn-outline" onClick={onPhotos}>
+            <Images size={15} /> Photos
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={onInvoice}>
+            <FileText size={15} /> Invoice
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** Super Admin: who gets credit for this order (fixes old/unassigned orders). */
+function SellerPicker({ order: o, staffList }: { order: Order; staffList: PublicStaff[] }) {
+  const s = orderSeller(o);
+  return (
+    <label className="flex items-center gap-1.5">
+      <span>Sales Person:</span>
+      <select
+        aria-label="Sales Person credited for this order"
+        value={s.uid}
+        onChange={async (e) => {
+          const p = staffList.find((x) => x.uid === e.target.value);
+          if (!confirm(p ? `Credit ${displayOrderId(o)} to ${p.name}?` : `Mark ${displayOrderId(o)} as unassigned?`)) return;
+          await updateDoc(doc(db, 'orders', o.id), {
+            salesPersonUid: p?.uid || '',
+            salesPersonName: p?.name || '',
+            salesPerson: p?.name || 'N/A',
+          });
+        }}
+        className={`h-7 max-w-40 rounded-full border px-2 text-xs ${s.uid ? 'border-line bg-white text-ink' : 'border-amber-300 bg-amber-50 text-amber-800'}`}
+      >
+        <option value="">{s.uid ? 'Unassigned' : `Unassigned${s.name !== 'Unassigned' ? ` (${s.name})` : ''}`}</option>
+        {staffList.map((p) => (
+          <option key={p.uid} value={p.uid}>{p.name}</option>
+        ))}
+      </select>
+    </label>
   );
 }
