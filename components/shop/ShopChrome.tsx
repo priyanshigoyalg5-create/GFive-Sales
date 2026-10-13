@@ -95,6 +95,10 @@ export function ShopFooter() {
       </div>
       <div className="border-t border-white/10 py-4 text-center text-xs text-ivory/50">
         © {new Date().getFullYear()} {s.companyName}
+        <span className="mx-2 text-ivory/30">·</span>
+        <Link href="/admin/login" className="text-ivory/60 underline-offset-2 hover:text-gold-100 hover:underline">
+          Staff login
+        </Link>
       </div>
     </footer>
   );
