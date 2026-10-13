@@ -143,8 +143,15 @@ export async function startModelVideo(photoUrl: string): Promise<string> {
     method: 'POST',
     headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      instances: [{ prompt: VIDEO_PROMPT, image: { inlineData: { mimeType: img.mimeType, data: img.data } } }],
-      parameters: { aspectRatio: '9:16', durationSeconds: '8', resolution: '720p', personGeneration: 'allow_adult' },
+      // Gemini API (Veo) wants the start frame as bytesBase64Encoded — not inlineData
+      instances: [{ prompt: VIDEO_PROMPT, image: { bytesBase64Encoded: img.data, mimeType: img.mimeType } }],
+      parameters: {
+        aspectRatio: '9:16',
+        durationSeconds: 8,
+        resolution: '720p',
+        personGeneration: 'allow_adult',
+        negativePrompt: 'text, logo, watermark, extra people, changed embroidery, different colour, distorted hands or face',
+      },
     }),
   });
   const data = await res.json().catch(() => ({}));
