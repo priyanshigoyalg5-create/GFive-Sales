@@ -9,7 +9,7 @@ Sample-link ordering for **GFive — Glamour Grace Unlimited** (Kolkata). The we
 ## Staff ownership & attribution
 - Every sample has a mandatory **design category** (Tyohaar / Rozana / Maharani / Shudh) and an owner (`createdByUid`) set automatically from the logged-in staff member. The catalogue is shared; only the owner or Super Admin can edit/trash a sample.
 - Links shared from the admin carry the sharer's id: `/s/<sampleId>?ref=<staffUid>`. An order placed from that link is credited to that person (`salesPersonUid`), separately from who created the sample (`sampleCreatorUid`). Links without a valid `ref` are credited to the sample's creator; very old orders show as "Unassigned" until the Super Admin credits them.
-- Placing an order saves it first, then opens WhatsApp chat with the credited salesperson's number (from Team / My profile; company number if they have none) with the full order message prefilled. The customer still has to press Send in WhatsApp.
+- Placing an order saves it first, then sends it on WhatsApp **with the design photo**: on phones via the share sheet (photo + full message; the customer picks the salesperson's chat, whose name/number is shown), on computers the photo is copied and the salesperson's chat opens with the message (Ctrl+V adds the photo). WhatsApp chat links cannot carry photos, so a fully automatic photo message would need the WhatsApp Business Cloud API. The customer always presses Send in WhatsApp.
 - Staff only ever load and can only update (status / trash) their own orders — enforced by `firestore.rules`, not just the UI.
 
 Old links (`/s/<id>`, `/admin/add?edit=<id>`) keep working, and order numbers continue from the same counter (`GFive#…`).

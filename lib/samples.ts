@@ -1,4 +1,5 @@
 import { categoryName } from './categories';
+import { canShareFiles, copyImageToClipboard, fetchImageFile, sharePhotosWithText, waTextUrl } from './wa-share';
 import type { ColorDetail, Sample } from './types';
 
 /** All main photos of a sample, de-duplicated, cover photo first. */
@@ -49,23 +50,22 @@ export function sampleShareText(s: Sample, link: string, salesPerson?: string): 
   );
 }
 
-/** Tries native share with the cover photo; falls back to a WhatsApp text link. */
-export async function shareSampleOnWhatsApp(s: Sample, ref?: string | null, salesPerson?: string): Promise<void> {
+/**
+ * Sends the design PHOTO + details + link. Phone: share sheet (pick the customer's chat).
+ * Computer: photo copied to clipboard + WhatsApp opens with the text (Ctrl+V adds the photo).
+ * Returns what happened so the caller can tell the user.
+ */
+export async function shareSampleOnWhatsApp(s: Sample, ref?: string | null, salesPerson?: string): Promise<'shared' | 'cancelled' | 'copied' | 'text'> {
   const link = sampleLink(s.id, ref);
   const text = sampleShareText(s, link, salesPerson);
   const cover = samplePhotos(s)[0];
-  if (typeof navigator !== 'undefined' && navigator.share && cover) {
-    try {
-      const res = await fetch(cover);
-      const blob = await res.blob();
-      const file = new File([blob], `Design_${s.designNumber}.jpg`, { type: blob.type || 'image/jpeg' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ text, files: [file] });
-        return;
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return; // user closed the sheet
-    }
+  const file = cover ? await fetchImageFile(cover, `Design_${s.designNumber}.jpg`) : null;
+  if (file && canShareFiles()) {
+    const r = await sharePhotosWithText([file], text);
+    if (r !== 'failed') return r;
   }
-  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  const copied = await copyImageToClipboard(file);
+  window.open(waTextUrl(text), '_blank');
+  if (copied) alert('Design photo copied. In WhatsApp, choose the customer, then press Ctrl+V to attach the photo and Send.');
+  return copied ? 'copied' : 'text';
 }

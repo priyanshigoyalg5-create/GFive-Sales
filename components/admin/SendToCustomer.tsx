@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Copy, Check, ImageIcon, Loader2, MessageCircle, Send, X } from 'lucide-react';
+import { Copy, Check, ImageIcon, Loader2, X } from 'lucide-react';
+import { copyImageToClipboard, fetchImageFile, sharePhotosWithText, waChatUrl } from '@/lib/wa-share';
 import type { Order } from '@/lib/types';
 import { digitsOnly } from '@/lib/format';
 import { buildOrderWhatsAppText, displayOrderId, getOrderLines, orderSeller } from '@/lib/orders';
@@ -48,30 +49,34 @@ export default function SendToCustomer({ order, onClose }: { order: Order; onClo
     return () => window.removeEventListener('keydown', k);
   }, [onClose]);
 
-  const openChat = () => window.open(`https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(text)}`, '_blank');
+  const openChat = () => window.open(waChatUrl(waPhone, text), '_blank');
 
-  const shareWithPhoto = async () => {
+  const files = async () =>
+    (
+      await Promise.all(
+        images.slice(0, 5).map((u, i) => fetchImageFile(u, `${displayOrderId(order).replace('#', '_')}_${lines[i]?.designNumber || i + 1}.jpg`)),
+      )
+    ).filter(Boolean) as File[];
+
+  /** Photo is compulsory: phone → share sheet; computer → copy photo + open the customer's chat. */
+  const send = async () => {
     setBusy(true);
     setNote(null);
     try {
-      const files = await Promise.all(
-        images.slice(0, 5).map(async (u, i) => {
-          const r = await fetch(jpg(u));
-          const b = await r.blob();
-          return new File([b], `${displayOrderId(order).replace('#', '_')}_${lines[i]?.designNumber || i + 1}.jpg`, { type: 'image/jpeg' });
-        }),
+      const f = await files();
+      if (canShareFiles && f.length) {
+        const r = await sharePhotosWithText(f, text);
+        if (r === 'shared') setNote('In WhatsApp, choose the customer’s chat and press Send.');
+        else if (r === 'failed') setNote('Could not open the share sheet. Please try again.');
+        return;
+      }
+      const ok = await copyImageToClipboard(f[0] || null);
+      openChat();
+      setNote(
+        ok
+          ? 'Photo copied. In the WhatsApp chat that opened, press Ctrl+V to attach the photo, then Send.'
+          : 'Couldn’t copy the photo automatically — drag the photo from this window into the WhatsApp chat, then Send.',
       );
-      if (files.length && navigator.canShare?.({ files, text })) {
-        await navigator.share({ files, text });
-        setNote('In WhatsApp, choose the customer’s chat and press Send.');
-      } else {
-        openChat();
-        setNote('This device can’t attach photos to WhatsApp from the browser, so the chat opened with the text only.');
-      }
-    } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setNote('Could not attach the photo. Try “Open customer chat” instead.');
-      }
     } finally {
       setBusy(false);
     }
@@ -102,13 +107,9 @@ export default function SendToCustomer({ order, onClose }: { order: Order; onClo
 
         <div className="space-y-2.5 border-t border-line bg-ivory p-4">
           {note && <p className="rounded-lg bg-gold-50 px-3 py-2 text-xs text-ink ring-1 ring-gold-100">{note}</p>}
-          {canShareFiles && images.length > 0 && (
-            <button className="btn btn-whatsapp h-12 w-full" onClick={shareWithPhoto} disabled={busy}>
-              {busy ? <Loader2 size={17} className="animate-spin" /> : <ImageIcon size={17} />} Send with photo
-            </button>
-          )}
-          <button className={`btn h-12 w-full ${canShareFiles && images.length ? 'btn-outline' : 'btn-whatsapp'}`} onClick={openChat}>
-            {canShareFiles && images.length ? <MessageCircle size={17} /> : <Send size={17} />} Open customer chat (text only)
+          <button className="btn btn-whatsapp h-12 w-full" onClick={send} disabled={busy || !images.length}>
+            {busy ? <Loader2 size={17} className="animate-spin" /> : <ImageIcon size={17} />}
+            {canShareFiles ? 'Send with photo' : 'Copy photo & open customer chat'}
           </button>
           <button
             className="btn btn-ghost btn-sm w-full"
@@ -122,8 +123,8 @@ export default function SendToCustomer({ order, onClose }: { order: Order; onClo
           </button>
           <p className="text-center text-[11px] text-muted">
             {canShareFiles
-              ? '“Send with photo” attaches the design photo — pick the customer’s chat in WhatsApp.'
-              : 'Photos can be attached from a phone. On a computer the chat opens with the message only.'}
+              ? 'The design photo is attached — pick the customer’s chat in WhatsApp and press Send.'
+              : 'On a computer: the photo is copied and the customer’s chat opens — press Ctrl+V there to attach it.'}
           </p>
         </div>
       </div>
