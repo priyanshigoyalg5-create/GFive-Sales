@@ -116,7 +116,34 @@ service cloud.firestore {
     // Company details shown on customer page & invoices.
     match /settings/{id} {
       allow read: if true;
-      allow write: if can('settings');
+      // settings/leads (who receives new leads) may also be changed by lead managers
+      allow write: if can('settings') || (id == 'leads' && can('manageLeads'));
+    }
+
+    // ---------------------------------------------------------------- leads
+    // Enquiries (website call-back, WhatsApp, Instagram, Facebook, added by team).
+    match /leads/{id} {
+      // Customers: a call-back request. It may only be given to the Sales Person behind the link.
+      allow create: if (request.resource.data.source == 'website'
+                    && request.resource.data.status == 'new'
+                    && request.resource.data.phone is string && request.resource.data.phone.size() <= 15
+                    && request.resource.data.name is string && request.resource.data.name.size() <= 80
+                    && request.resource.data.get('message', '').size() <= 500
+                    && (request.resource.data.assignedUid == ''
+                        || activePublicStaff(request.resource.data.assignedUid))
+                    && !('createdByUid' in request.resource.data))
+                    // Team: add leads by hand (Admins only for themselves)
+                    || (isStaff()
+                        && request.resource.data.createdByUid == request.auth.uid
+                        && (can('manageLeads') || request.resource.data.assignedUid == request.auth.uid));
+      // Admins see only leads given to them; lead managers see all.
+      allow read: if can('manageLeads') || (isStaff() && resource.data.assignedUid == request.auth.uid);
+      // Admins update their own leads (status, notes, follow-up) but cannot pass them on.
+      allow update: if can('manageLeads')
+                    || (isStaff()
+                        && resource.data.assignedUid == request.auth.uid
+                        && onlyChanges(['status', 'notes', 'followUpAt', 'updatedAt']));
+      allow delete: if isSuper();
     }
 
     // ---------------------------------------------------------------- staff

@@ -49,6 +49,33 @@ export async function createOrder(data: Record<string, unknown>): Promise<string
   return ref.id;
 }
 
+/** Customer asks for a call back (becomes a lead for the Sales Person behind the link). */
+export async function createLead(data: {
+  name: string; phone: string; city: string; message: string; designId: string; designNumber: string; category: string; qty: number;
+  sellerUid: string; sellerName: string; refUid: string;
+}): Promise<void> {
+  await addDoc(collection(db, 'leads'), {
+    name: data.name.slice(0, 80),
+    phone: data.phone.slice(0, 15),
+    city: data.city.slice(0, 60),
+    message: data.message.slice(0, 500),
+    designId: data.designId,
+    designNumber: data.designNumber,
+    category: data.category,
+    qty: data.qty,
+    source: 'website',
+    status: 'new',
+    refUid: data.refUid,
+    assignedUid: data.sellerUid,
+    assignedName: data.sellerUid ? data.sellerName : '',
+    assignReason: data.sellerUid ? (data.refUid ? 'Came from their design link' : 'Added the design') : '',
+    assignedAt: data.sellerUid ? serverTimestamp() : null,
+    notes: [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 let settingsPromise: Promise<CompanySettings> | null = null;
 function loadSettings(): Promise<CompanySettings> {
   settingsPromise ??= getDoc(doc(db, 'settings', 'company'))

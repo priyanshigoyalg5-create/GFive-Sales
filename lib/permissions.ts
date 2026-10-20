@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   { key: 'manageAllOrders', group: 'Orders', label: 'Change status of all orders', hint: 'Pending / Dispatched / Completed / Trash', needs: 'viewAllOrders' },
   { key: 'reassignOrders', group: 'Orders', label: 'Change Sales Person credit', hint: 'Who gets the order for salary', needs: 'viewAllOrders' },
   { key: 'deleteOrders', group: 'Orders', label: 'Delete orders forever', needs: 'viewAllOrders' },
+  { key: 'manageLeads', group: 'Leads', label: 'See & transfer all leads', hint: 'Leads from WhatsApp, Instagram, Facebook & website; give them to any Sales Person' },
   { key: 'staffSales', group: 'Reports', label: 'Sales Person Sales report', hint: 'Sales of every Sales Person (salary)', needs: 'viewAllOrders' },
   { key: 'askAI', group: 'Reports', label: 'Ask AI', hint: 'Sales questions to the AI assistant' },
   { key: 'manageTeam', group: 'Team & settings', label: 'Add / disable Admins', hint: 'Cannot create Sub Admins or Super Admins' },
