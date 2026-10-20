@@ -25,6 +25,7 @@ export interface Lead {
   city?: string;
   handle?: string; // @instagram / facebook name
   source: LeadSource;
+  kind?: 'sales' | 'care'; // 'care' = complaint / customer-care request
   message?: string;
   designId?: string;
   designNumber?: string;

@@ -120,6 +120,12 @@ service cloud.firestore {
       allow write: if can('settings') || (id == 'leads' && can('manageLeads'));
     }
 
+    // Private configuration (WhatsApp bot on/off, test numbers). The webhook reads it with admin access.
+    match /config/{id} {
+      allow read, write: if can('settings');
+    }
+    // waSessions, waInbound: server only (no client access).
+
     // ---------------------------------------------------------------- leads
     // Enquiries (website call-back, WhatsApp, Instagram, Facebook, added by team).
     match /leads/{id} {

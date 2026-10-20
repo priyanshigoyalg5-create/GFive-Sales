@@ -77,3 +77,9 @@ Enquiries from the website call-back form ("Not ready to order yet?" on every de
 - **Lead filter** (`lib/leads.ts` → `scoreLead`): 0–100 score → Hot / Warm / Cold; spam detection; repeat customers (phone matches an old order) and repeat enquiries get a boost. The "Why" line shows the reasons.
 - **Auto-transfer** (`pickAssignee`): 1) Sales Person whose link the customer used, 2) Sales Person of the customer's last order, 3) fair rotation to whoever has the fewest open leads among "Who gets leads" (`settings/leads.receivers`, empty = everyone). Runs when a lead manager opens the page (later: in the WhatsApp/Instagram webhook).
 - Admins see only their own leads (status, follow-up date, notes); Super Admin / Sub Admin with **See & transfer all leads** see all and can transfer, then tell the new Sales Person on WhatsApp in one tap.
+
+## WhatsApp bot (Settings → WhatsApp bot)
+
+Customers message the business number and get a menu: **New designs** (photo cards by collection, with an *Order* button that sends the design link carrying their Sales Person's `?ref=`), **Order**, **My orders** (status by mobile number), **Customer care** (becomes a red "Customer care" lead), **Talk to my Sales Person**, **Address / contact**. Typing a design number shows that design. Every new chat becomes a WhatsApp **lead**, auto-given to one Sales Person (same rules as the Leads page); later messages are added to the lead's notes. STOP / START supported; unfinished steps expire after 1 hour; Meta retries are de-duplicated; test mode answers only listed numbers.
+
+Webhook: `app/api/whatsapp/webhook` (signature-checked). Server data access uses `firebase-admin` with `FIREBASE_SERVICE_ACCOUNT`. Setup: `docs/WHATSAPP_SETUP.md`. Privacy policy for Meta: `/privacy`.

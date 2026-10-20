@@ -272,6 +272,7 @@ function LeadCard({
             </span>
             <span className={`rounded-full px-2 py-0.5 text-xs ${LEAD_SOURCES[l.source]?.color || 'bg-sand'}`}>{LEAD_SOURCES[l.source]?.label || l.source}</span>
             {s.repeatCustomer && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Existing customer</span>}
+            {l.kind === 'care' && <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs font-medium text-white">Customer care</span>}
           </div>
           <p className="mt-0.5 text-sm text-muted">
             {[l.city, l.handle && !l.name ? '' : l.handle, sample ? `Design #${sample.designNumber}${categoryName(sample.category) ? ` · ${categoryName(sample.category)}` : ''}` : l.designNumber ? `Design #${l.designNumber}` : '', l.qty ? `${l.qty} pcs` : '']

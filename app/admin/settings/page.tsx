@@ -7,6 +7,7 @@ import { useSettings, SETTINGS_DOC } from '@/lib/settings';
 import { digitsOnly } from '@/lib/format';
 import type { CompanySettings } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
+import WhatsAppBotCard from '@/components/admin/WhatsAppBotCard';
 
 const FIELDS: { key: keyof CompanySettings; label: string; hint?: string }[] = [
   { key: 'companyName', label: 'Company name (on invoice)' },
@@ -63,6 +64,9 @@ function SettingsForm({ current, msg, setMsg }: { current: CompanySettings; msg:
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save settings
         </button>
       </form>
+      <div className="mt-6">
+        <WhatsAppBotCard />
+      </div>
     </>
   );
 }
