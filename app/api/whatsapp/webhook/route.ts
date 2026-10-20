@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     return new Response('Bad request', { status: 400 });
   }
   const store = adminStore();
+  if ((await store.getConfig()).provider !== 'meta') return new Response('OK', { status: 200 }); // bot set to WATI
   const site = process.env.NEXT_PUBLIC_SITE_URL || `https://${req.headers.get('host')}`;
   const chains: Record<string, Promise<void>> = {};
   for (const entry of body.entry || []) {

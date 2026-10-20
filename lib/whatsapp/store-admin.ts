@@ -22,7 +22,7 @@ export function adminStore(): BotStore {
     },
     async getConfig(): Promise<BotConfig> {
       const d = (await db.doc('config/whatsapp').get()).data() || {};
-      return { on: d.on === true, testNumbers: Array.isArray(d.testNumbers) ? d.testNumbers : [] };
+      return { on: d.on === true, testNumbers: Array.isArray(d.testNumbers) ? d.testNumbers : [], provider: d.provider === 'wati' ? 'wati' : 'meta' };
     },
     async getSettings(): Promise<CompanySettings> {
       const d = (await db.doc('settings/company').get()).data() || {};

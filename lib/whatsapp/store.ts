@@ -10,11 +10,13 @@ export interface WaSession {
   assignedUid?: string;
   lastInboundAt?: number;
   optOut?: boolean;
+  choices?: Record<string, string>; // last menu shown: button/row title (and 1,2,3…) → action id (for WATI / typed replies)
 }
 
 export interface BotConfig {
   on: boolean; // bot switched on by the Super Admin
   testNumbers: string[]; // if set, the bot answers only these numbers (91XXXXXXXXXX)
+  provider: 'meta' | 'wati'; // where the business number is connected
 }
 
 export interface BotStore {
