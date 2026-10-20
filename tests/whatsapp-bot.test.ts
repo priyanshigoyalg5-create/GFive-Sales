@@ -32,7 +32,7 @@ function world(opts: { on?: boolean; tests?: string[] } = {}) {
   ];
   const store: BotStore = {
     async claimMessage(id) { if (seen.has(id)) return false; seen.add(id); return true; },
-    async getConfig() { return { on: opts.on ?? true, testNumbers: opts.tests || [] }; },
+    async getConfig() { return { on: opts.on ?? true, testNumbers: opts.tests || [], provider: 'meta' as const }; },
     async getSettings() { return { ...DEFAULT_SETTINGS, companyName: 'GFive Kolkata', addressLine: '113 Park Street', whatsappNumber: '917044440614' }; },
     async getSession(p) { return { ...(sessions.get(p) || {}) }; },
     async saveSession(p, patch) { const cur = { ...(sessions.get(p) || {}), ...patch }; if (patch.state === '') { delete cur.state; delete cur.stateAt; } sessions.set(p, cur); },
@@ -180,4 +180,43 @@ test('webhook signature check', () => {
   assert.equal(validSignature(raw, sig, 'sec'), true);
   assert.equal(validSignature(raw, sig, 'other'), false);
   assert.equal(validSignature(raw, null, 'sec'), false);
+});
+
+// ---------------------------------------------------------------- WATI
+import { watiToIncoming, asText } from '../lib/whatsapp/wati-format';
+
+test('WATI text / list / button webhook → bot message; operator messages ignored', () => {
+  const t = watiToIncoming({ eventType: 'message', whatsappMessageId: 'w1', waId: '919000011111', senderName: 'Ramesh', text: 'hi', type: 'text', owner: false })!;
+  assert.equal(t.msg.type, 'text');
+  assert.equal(t.msg.text?.body, 'hi');
+  assert.equal(t.name, 'Ramesh');
+  const l = watiToIncoming({ eventType: 'message', id: 'w2', waId: '919000011111', type: 'interactive', listReply: { title: '🆕 Naye designs' } })!;
+  assert.equal(l.msg.interactive?.list_reply?.title, '🆕 Naye designs');
+  const b = watiToIncoming({ eventType: 'message', id: 'w3', waId: '919000011111', type: 'button', buttonReply: { text: '🛒 Order RZ0138', payload: '' } })!;
+  assert.equal(b.msg.interactive?.button_reply?.title, '🛒 Order RZ0138');
+  assert.equal(watiToIncoming({ eventType: 'message', id: 'w4', waId: '91900', text: 'x', owner: true }), null);
+  assert.equal(watiToIncoming({ eventType: 'sentMessageDELIVERED', id: 'w5', waId: '91900' }), null);
+});
+
+test('WATI-style title-only replies reach the right action (menu, category, order of 2nd card)', async () => {
+  const w = world();
+  await w.say('919000011111', 'hi');
+  const tapTitle = (title: string) => handle(w.msg('919000011111', { type: 'interactive', interactive: { type: 'list_reply', list_reply: { id: title, title } } }), 'R', w.deps);
+  await tapTitle('🆕 Naye designs');
+  assert.match(bodyOf(last(w)), /Kaunsi collection/);
+  await tapTitle('Rozana');
+  await tapTitle('🛒 Order RZ0200'); // second card
+  assert.match(bodyOf(last(w)), /Design #RZ0200[\s\S]*\/s\/s3\?ref=/);
+});
+
+test('typed number picks the option of the last menu', async () => {
+  const w = world();
+  await w.say('919830012345', 'hi');
+  await w.say('919830012345', '3'); // 3 = Mere orders
+  assert.match(bodyOf(last(w)), /GFive#23/);
+});
+
+test('WATI text fallback lists options with numbers', () => {
+  const t = asText({ type: 'list', body: { text: 'Kya dekhna hai?' }, action: { button: 'Select', sections: [{ title: 'Select', rows: [{ id: 'm:new', title: 'Naye designs' }, { id: 'm:mine', title: 'Mere orders' }] }] } });
+  assert.match(t, /\*1\.\* Naye designs\n\*2\.\* Mere orders/);
 });

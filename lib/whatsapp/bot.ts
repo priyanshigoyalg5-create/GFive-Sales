@@ -132,11 +132,34 @@ export async function handle(m: Incoming, contactName: string, deps: BotDeps): P
   const tests = cfg.testNumbers.map(normPhone).filter(Boolean);
   if (tests.length && !tests.includes(phone)) return; // test mode: only our own numbers
 
-  const say = (p: WaPayload) => deps.send(phone, p);
+  // remember the options of the last menu, so a reply by title or number ("2") works too (WATI, typed answers)
+  const choices: Record<string, string> = {};
+  const say = async (p: WaPayload) => {
+    const opts = choicesOf(p);
+    if (opts.length) {
+      // numbers always point at the latest menu; titles add up over this reply (design cards + nav)
+      for (const k of Object.keys(choices)) if (/^\d+$/.test(k)) delete choices[k];
+      opts.forEach((o, i) => {
+        choices[String(i + 1)] = o.id;
+        choices[norm(o.title)] = o.id;
+      });
+      await store.saveSession(phone, { choices: { ...choices } });
+    }
+    return deps.send(phone, p);
+  };
   const settings = await store.getSettings();
   const company = settings.companyName || 'GFive Kolkata';
   let sess: WaSession = await store.getSession(phone);
-  const p = parse(m);
+  let p = parse(m);
+  // map a reply to its action id when the provider only gives us the title, or the customer typed the number
+  if (p.kind === 'action' && !/^(m|cat|order):/.test(p.id)) {
+    const id = sess.choices?.[norm(p.title || p.id)] || sess.choices?.[norm(p.id)];
+    if (id) p = { kind: 'action', id, title: p.title };
+  } else if (p.kind === 'text' && sess.choices && /^\d{1,2}$/.test(p.text) && sess.choices[p.text] && sess.state !== 'order_ask') {
+    p = { kind: 'action', id: sess.choices[p.text] };
+  } else if (p.kind === 'text' && sess.choices?.[norm(p.text)] && sess.state !== 'care') {
+    p = { kind: 'action', id: sess.choices[norm(p.text)] };
+  }
   const text = p.kind === 'text' ? p.text : p.kind === 'media' ? p.caption : '';
 
   // STOP / START (Meta policy)
@@ -240,6 +263,17 @@ export async function handle(m: Incoming, contactName: string, deps: BotDeps): P
 
 // ---------------------------------------------------------------- helpers
 
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** Buttons / list rows inside a payload (Meta format). */
+export function choicesOf(p: WaPayload): { id: string; title: string }[] {
+  const i = (p as { interactive?: { type?: string; action?: { buttons?: { reply: { id: string; title: string } }[]; sections?: { rows: { id: string; title: string }[] }[] } } }).interactive;
+  if (!i) return [];
+  if (i.type === 'button') return (i.action?.buttons || []).map((b) => b.reply);
+  if (i.type === 'list') return (i.action?.sections || []).flatMap((s) => s.rows.map((r) => ({ id: r.id, title: r.title })));
+  return [];
+}
+
 type LeadRef = { id: string; assignedUid: string; assignedName: string; justCreated: boolean };
 
 async function ensureLead(phone: string, name: string, text: string, sess: WaSession, deps: BotDeps, now: number): Promise<LeadRef> {
@@ -289,7 +323,8 @@ async function addNote(leadId: string, text: string, deps: BotDeps) {
 async function sendDesignCard(s: Sample, deps: BotDeps, say: (p: WaPayload) => Promise<unknown>) {
   const photo = samplePhotos(s)[0];
   const body = designCaption(s);
-  const buttons = [{ id: `order:${s.id}`, title: '🛒 Order karein' }, { id: 'm:sp', title: '📞 Sales Person' }];
+  // title carries the design no. so a title-only reply (WATI) still finds the right design
+  const buttons = [{ id: `order:${s.id}`, title: `🛒 Order ${s.designNumber}` }, { id: 'm:sp', title: '📞 Sales Person' }];
   await say(photo ? P.buttons(body, buttons, { imageUrl: waImage(photo) }) : P.buttons(body, buttons));
 }
 
@@ -304,7 +339,7 @@ async function sendDesigns(samples: Sample[], cat: string, offset: number, deps:
   const more = offset + PAGE < list.length;
   await say(
     P.buttons(
-      `${offset + 1}–${offset + page.length} of ${list.length} designs${cat !== 'all' ? ` · ${categoryName(cat)}` : ''}.\nOrder karne ke liye design ke neeche *Order karein* tap karein.`,
+      `${offset + 1}–${offset + page.length} of ${list.length} designs${cat !== 'all' ? ` · ${categoryName(cat)}` : ''}.\nOrder karne ke liye design ke neeche *🛒 Order* tap karein.`,
       [...(more ? [{ id: `cat:${cat}:${offset + PAGE}`, title: 'Aur designs ➡️' }] : []), { id: 'm:new', title: 'Doosri collection' }, { id: 'm:menu', title: 'Menu' }],
     ),
   );
