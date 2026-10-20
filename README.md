@@ -69,3 +69,11 @@ Turns the original photo of an unstitched suit into a catalogue photo of a model
 - Only signed-in, active Sales Persons can call `/api/ai/*`, and only our own Cloudinary photos are sent to Google.
 - Results are uploaded to the same Cloudinary account (the unsigned upload preset must allow videos).
 - Every AI photo is stored in `sample.aiImages` and is labelled **"AI generated"** (originals say **"Original"**) in the admin and on the customer page; the video is `sample.videoUrl`, labelled "AI generated video". When the cover is AI, the WhatsApp share message says so too.
+
+## Leads (Admin → Leads)
+
+Enquiries from the website call-back form ("Not ready to order yet?" on every design link), WhatsApp, Instagram, Facebook, post comments, or added by hand.
+
+- **Lead filter** (`lib/leads.ts` → `scoreLead`): 0–100 score → Hot / Warm / Cold; spam detection; repeat customers (phone matches an old order) and repeat enquiries get a boost. The "Why" line shows the reasons.
+- **Auto-transfer** (`pickAssignee`): 1) Sales Person whose link the customer used, 2) Sales Person of the customer's last order, 3) fair rotation to whoever has the fewest open leads among "Who gets leads" (`settings/leads.receivers`, empty = everyone). Runs when a lead manager opens the page (later: in the WhatsApp/Instagram webhook).
+- Admins see only their own leads (status, follow-up date, notes); Super Admin / Sub Admin with **See & transfer all leads** see all and can transfer, then tell the new Sales Person on WhatsApp in one tap.

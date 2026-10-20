@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Order, Sample } from './types';
+import type { Lead } from './leads';
+import { doc } from 'firebase/firestore';
 import { useAuth } from './auth';
 import { tsToDate } from './format';
 
@@ -66,4 +68,49 @@ export function useOrders(enabled = true) {
     );
   }, [enabled, uid, all]);
   return { orders, loading, error };
+}
+
+/**
+ * Leads visible to the signed-in person: all of them for Super Admin / Sub Admin with
+ * "See & transfer all leads"; otherwise only leads given to them (rules enforce the same).
+ */
+export function useLeads(enabled = true) {
+  const { profile, can } = useAuth();
+  const uid = profile?.uid || '';
+  const all = can('manageLeads');
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!enabled || !uid) return;
+    const q = all ? query(collection(db, 'leads'), orderBy('createdAt', 'desc')) : query(collection(db, 'leads'), where('assignedUid', '==', uid));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ ...(d.data() as Omit<Lead, 'id'>), id: d.id }));
+        list.sort((a, b) => (tsToDate(b.createdAt)?.getTime() || 0) - (tsToDate(a.createdAt)?.getTime() || 0));
+        setLeads(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.error(err);
+        setLoading(false);
+      },
+    );
+  }, [enabled, uid, all]);
+  return { leads, loading };
+}
+
+/** Who receives new leads (settings/leads.receivers; empty = every active Sales Person). */
+export function useLeadReceivers() {
+  const [receivers, setReceivers] = useState<string[]>([]);
+  useEffect(
+    () =>
+      onSnapshot(
+        doc(db, 'settings', 'leads'),
+        (s) => setReceivers((s.data()?.receivers as string[]) || []),
+        () => setReceivers([]),
+      ),
+    [],
+  );
+  return receivers;
 }

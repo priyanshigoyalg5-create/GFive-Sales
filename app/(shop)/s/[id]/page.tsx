@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, CheckCircle2, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Expand, Palette, MessageCircle, Loader2, CheckCircle2, Share2, Phone } from 'lucide-react';
 import type { OrderLine, Sample } from '@/lib/types';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
 import { sampleColors, samplePhotos, allSamplePhotos, sampleLink, isAiPhoto } from '@/lib/samples';
 import { buildOrderWhatsAppText, type CustomerDetails } from '@/lib/orders';
 import { loadCustomer, saveCustomer } from '@/lib/customer';
-import { createOrder, getPublicStaff, getSample, nextOrderNumber, usePublicSettings } from '@/lib/public-db';
+import { createLead, createOrder, getPublicStaff, getSample, nextOrderNumber, usePublicSettings } from '@/lib/public-db';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
 import { canShareFiles, fetchImageFile, sharePhotosWithText } from '@/lib/wa-share';
@@ -35,6 +35,8 @@ export default function SampleOrderPage() {
   // design photo, fetched in advance so it can be attached to the WhatsApp message instantly
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [phoneShare] = useState(() => canShareFiles());
+  const [cb, setCb] = useState<'idle' | 'busy' | 'done'>('idle');
+  const [cbErr, setCbErr] = useState<string | null>(null);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'shared'>('idle');
   const touchX = useRef<number | null>(null);
 
@@ -265,6 +267,40 @@ export default function SampleOrderPage() {
 
   const move = (d: number) => photos.length && setActive((i) => (i + d + photos.length) % photos.length);
 
+  // ---------- call back → lead for the Sales Person behind this link
+  const requestCallBack = async () => {
+    if (!sample) return;
+    const mobile = digitsOnly(c.mobile);
+    if (mobile.length < 10) {
+      setCbErr('Please enter your mobile number above.');
+      document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    setCbErr(null);
+    setCb('busy');
+    try {
+      await createLead({
+        name: c.firmName.trim(),
+        phone: mobile.length === 10 ? `91${mobile}` : mobile,
+        city: c.city.trim(),
+        message: c.remarks.trim() || `Call back about Design #${sample.designNumber}`,
+        designId: sample.id,
+        designNumber: String(sample.designNumber),
+        category: normCategory(sample.category),
+        qty: totalPcs,
+        sellerUid: seller?.uid || '',
+        sellerName: seller?.name || '',
+        refUid: new URLSearchParams(window.location.search).get('ref') || '',
+      });
+      saveCustomer({ ...c, remarks: '' });
+      setCb('done');
+    } catch (err) {
+      console.error(err);
+      setCbErr('Could not send. Please try again or WhatsApp us.');
+      setCb('idle');
+    }
+  };
+
   return (
     <div className="pb-28 md:pb-0">
       <div className="mx-auto mt-4 grid max-w-5xl gap-6 px-4 md:mt-8 md:grid-cols-[1fr_1fr] lg:gap-10">
@@ -466,6 +502,23 @@ export default function SampleOrderPage() {
               {busy ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
               {busy ? 'Placing order…' : `Place order on WhatsApp · ${totalPcs} pcs`}
             </button>
+          </section>
+
+          {/* Call back (becomes a lead) */}
+          <section className="card mt-5 p-4 sm:p-5">
+            <h2 className="font-display text-xl font-semibold text-ink">Not ready to order yet?</h2>
+            <p className="text-sm text-muted">Ask for a call back — {seller?.name || 'our team'} will call you about rate, colours and delivery.</p>
+            {cb === 'done' ? (
+              <p className="mt-3 flex items-center gap-2 rounded-lg bg-leaf-50 px-3 py-2 text-sm text-leaf-800"><CheckCircle2 size={16} /> Thank you! We will call you soon.</p>
+            ) : (
+              <>
+                <p className="mt-2 text-xs text-muted">Uses the firm name, mobile and city above{totalPcs ? ` · ${totalPcs} pcs selected` : ''}.</p>
+                <button onClick={requestCallBack} disabled={cb === 'busy'} className="btn btn-outline mt-3 w-full">
+                  {cb === 'busy' ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} Request a call back
+                </button>
+                {cbErr && <p className="mt-2 text-sm text-red-700">{cbErr}</p>}
+              </>
+            )}
           </section>
         </div>
       </div>

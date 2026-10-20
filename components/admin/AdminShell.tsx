@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { ClipboardList, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
+import { ClipboardList, Inbox, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { ROLE_LABEL, type Permission } from '@/lib/permissions';
 import NamePrompt from './NamePrompt';
@@ -11,6 +11,7 @@ import NamePrompt from './NamePrompt';
 // `need` = permission required to see the page (Super Admin always can)
 const NAV: { href: string; label: string; icon: typeof ClipboardList; need?: Permission }[] = [
   { href: '/admin/orders', label: 'Orders', icon: ClipboardList },
+  { href: '/admin/leads', label: 'Leads', icon: Inbox },
   { href: '/admin/samples', label: 'Samples', icon: Shirt },
   { href: '/admin/samples/new', label: 'Add Sample', icon: PlusCircle, need: 'addSamples' },
   { href: '/admin/assistant', label: 'Ask AI', icon: Sparkles, need: 'askAI' },
