@@ -7,6 +7,7 @@
  */
 import { categoryName } from '../categories';
 import { inr } from '../format';
+import { checkGstin, findGstin } from '../gst';
 import { assignWithFilter, buildLeadContext, isOpen, qualifies, scoreLead, type Lead } from '../leads';
 import { samplePhotos } from '../sample-photos';
 import type { Sample } from '../types';
@@ -171,7 +172,10 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
   const text = (e.message?.text || e.postback?.title || '').trim();
   const payload = e.message?.quick_reply?.payload || e.postback?.payload || '';
   const samples = (await d.store.samples()).filter((s) => !s.isTrashed);
-  const design = text ? findDesign(text, samples) : null;
+  const gstRaw = findGstin(text);
+  const gst = gstRaw ? checkGstin(gstRaw) : null;
+  const design = text && !gstRaw ? findDesign(text, samples) : null;
+  const f = await d.store.getLeadFilter();
 
   const got = await ensureLead(d, platform, userId, { text, source: platform, design });
   const { key, sess, created } = got;
@@ -184,6 +188,15 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
     ...(design ? { designId: design.id, designNumber: String(design.designNumber), category: design.category || '' } : {}),
     ...(phone ? { phone: `91${phone}` } : {}),
   };
+  if (gst?.ok) {
+    patch.gstin = gst.gstin;
+    patch.buyerType = 'business'; // has a GST number → trade buyer
+    if (f.gstOnline && d.store.checkGst) {
+      const names = [got.lead.firm || '', got.lead.name || ''];
+      patch.gstCheck = await d.store.checkGst(gst.gstin, names).catch((err) => (console.error('gst check', err), null));
+    }
+  }
+  if (gst || payload === 'NO_GST') await d.store.saveSocialSession(key, { state: '', gstAsked: true });
   await d.store.updateLead(got.lead.id, patch);
   const before = got.lead.assignedUid;
   const lead = await screen(d, { ...got.lead, ...patch }); // lead filter
@@ -191,12 +204,15 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
 
   const ref = lead.assignedUid;
   const say = (t: string, q: QuickReply[] = menu()) => d.api.sendDM(platform, userId, t, q);
-  const f = await d.store.getLeadFilter();
 
   // ---------- answers to the bot's own questions (buyer type → pieces → mobile)
   if (answers.buyerType === 'personal' && f.personal === 'hold') {
     const st = await d.store.getSettings();
     return void (await say(`Shukriya 🙏 Hum wholesale (shop / boutique) ke liye kaam karte hain.${st.website ? `\nApne liye kharidne ke liye hamara online store dekhein 👇\n${st.website}` : ''}`, []));
+  }
+  if (gst && !gst.ok) {
+    await d.store.saveSocialSession(key, { state: 'gst_ask' });
+    return void (await say(`Yeh GST number sahi nahi lag raha 🤔 (${gst.reason})\nKripya 15-character GST number dobara bhejein, jaise 19ABCDE1234F1Z5.`, [{ title: 'GST nahi hai', payload: 'NO_GST' }]));
   }
   if (lead.assignedUid && !before) {
     return void (await say(`Shukriya 🙏 ${lead.assignedName} aapko${lead.phone ? ` +${lead.phone}` : ''} par jaldi call karenge. Tab tak naye designs dekhein 👇\n${bioUrl(d, platform, ref)}`, []));
@@ -226,6 +242,17 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
   if (sess.state === 'phone_ask' && text && !phone) {
     return void (await say('Mobile number 10 digit mein bhejein (jaise 98xxxxxxxx), taaki hum call kar sakein.', []));
   }
+  if (gst?.ok && !lead.assignedUid) {
+    await say('Shukriya 🙏 GST number mil gaya. Hamari team check karke aapse contact karegi.', []);
+    return void (await nextQuestion(d, platform, userId, key, lead));
+  }
+  if (sess.state === 'gst_ask' && payload !== 'NO_GST' && text && !gst) {
+    return void (await say('GST number 15 characters ka hota hai (jaise 19ABCDE1234F1Z5). Nahi hai toh "GST nahi hai" dabayein.', [{ title: 'GST nahi hai', payload: 'NO_GST' }]));
+  }
+  if (payload === 'NO_GST') {
+    if (!lead.assignedUid) await say('Koi baat nahi 🙏 Hamari team aapse jaldi contact karegi.', []);
+    return;
+  }
   if (answers.buyerType || answers.qty || phone) return void (await nextQuestion(d, platform, userId, key, lead));
   if (created || /^(hi+|hello|hey|namaste|menu|start)\b/i.test(text)) {
     await say(`Namaste 🙏 GFive Kolkata — designer unstitched suits (wholesale).\nKya dekhna hai?`);
@@ -243,6 +270,12 @@ async function nextQuestion(d: SocialDeps, platform: Platform, userId: string, k
   if (!lead.phone) {
     await d.store.saveSocialSession(key, { state: 'phone_ask' });
     return void (await d.api.sendDM(platform, userId, 'Apna mobile number bhejein — hamare Sales Person rate aur colours ke saath call karenge 📞', []));
+  }
+  // still on hold after the mobile number: a GST number usually settles it for a shop
+  const sess = await d.store.getSocialSession(key);
+  if (lead.buyerType === 'business' && !lead.gstin && !sess.gstAsked) {
+    await d.store.saveSocialSession(key, { state: 'gst_ask', gstAsked: true });
+    return void (await d.api.sendDM(platform, userId, 'Shop ka GST number bhejein (ho toh) — isse aapka wholesale rate aur order jaldi confirm hota hai. 🧾', [{ title: 'GST nahi hai', payload: 'NO_GST' }]));
   }
 }
 
@@ -276,8 +309,8 @@ async function handleComment(d: SocialDeps, platform: Platform, v: NonNullable<C
   if (!cfg.on) return;
   const ref = lead.assignedUid;
   const dm = design
-    ? `Namaste 🙏 Aapne Design #${design.designNumber} ke baare mein poocha:\n\n${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}\n\nAap shop / boutique ke liye lena chahte hain? Reply karein *SHOP* ya *PERSONAL*, aur apna mobile number bhejein — hamare Sales Person call karenge.`
-    : `Namaste 🙏 GFive Kolkata se. Naye designs, rate aur order yahan 👇\n${bioUrl(d, platform, ref)}\n\nShop / boutique ke liye? Reply karein *SHOP* ya *PERSONAL*, aur design no. ya mobile number bhejein.`;
+    ? `Namaste 🙏 Aapne Design #${design.designNumber} ke baare mein poocha:\n\n${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}\n\nAap shop / boutique ke liye lena chahte hain? Reply karein *SHOP* ya *PERSONAL*, aur apna mobile number (shop ho toh GST number bhi) bhejein — hamare Sales Person call karenge.`
+    : `Namaste 🙏 GFive Kolkata se. Naye designs, rate aur order yahan 👇\n${bioUrl(d, platform, ref)}\n\nShop / boutique ke liye? Reply karein *SHOP* ya *PERSONAL*, aur design no., mobile number ya GST number bhejein.`;
   await d.api.privateReply(commentId, dm).catch((e) => console.error('private reply', e));
   await d.api.publicReply(platform, commentId, 'Aapko DM kiya hai 🙏 Please check your messages.').catch((e) => console.error('public reply', e));
 }

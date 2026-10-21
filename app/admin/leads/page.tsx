@@ -19,11 +19,23 @@ import {
 } from '@/lib/leads';
 import type { PublicStaff, Sample } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
+import { GST_LEVEL_STYLE, checkGstin, gstLevel, maskGstin } from '@/lib/gst';
+import type { User } from 'firebase/auth';
+
+/** Online GST check (server saves the result on the lead). */
+async function verifyGst(user: User, leadId: string): Promise<string | null> {
+  const t = await user.getIdToken();
+  const r = await fetch('/api/gst/verify', { method: 'POST', headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId }) });
+  if (r.ok) return null;
+  const d = await r.json().catch(() => ({}));
+  return d.error || 'GST check failed';
+}
 
 type TempFilter = 'all' | LeadTemp | 'spam' | 'hold';
 
 export default function LeadsPage() {
-  const { profile, can } = useAuth();
+  const { profile, can, state } = useAuth();
+  const user = state.status === 'ready' ? state.user : null;
   const uid = profile?.uid || '';
   const manage = can('manageLeads');
   const { leads, loading } = useLeads();
@@ -49,8 +61,22 @@ export default function LeadsPage() {
 
   // ---------- auto-transfer: give every new, unassigned, non-spam lead to one Sales Person
   const assigning = useRef(false);
+  const gstTried = useRef(new Set<string>());
   useEffect(() => {
     if (!manage || assigning.current || !team.length) return;
+    // GST numbers are checked online first (when switched on) so the filter sees the result
+    const gstTodo = filter.gstOnline && user
+      ? leads.filter((l) => !l.assignedUid && isOpen(l) && !l.gstCheck && checkGstin(l.gstin).ok && !gstTried.current.has(l.id)).slice(0, 5)
+      : [];
+    if (gstTodo.length) {
+      assigning.current = true;
+      gstTodo.forEach((l) => gstTried.current.add(l.id));
+      (async () => {
+        for (const l of gstTodo) await verifyGst(user!, l.id).then((e) => e && console.warn('gst', e)).catch((e) => console.error('gst', e));
+        assigning.current = false;
+      })();
+      return;
+    }
     // only leads that pass the lead filter are given; the rest wait in "On hold" with the reason
     const todo = scored.filter(({ l, s }) => !l.assignedUid && !s.spam && isOpen(l) && (qualifies(l, s, filter).ok || l.holdReason !== qualifies(l, s, filter).reason));
     if (!todo.length) return;
@@ -73,7 +99,7 @@ export default function LeadsPage() {
       }
       assigning.current = false;
     })();
-  }, [manage, scored, team, filter, ctx, leads]);
+  }, [manage, scored, team, filter, ctx, leads, user]);
 
   // ---------- filters
   const shown = useMemo(() => {
@@ -87,7 +113,7 @@ export default function LeadsPage() {
         if (source && leadSource(l) !== source) return false;
         if (person === 'none' ? !!l.assignedUid : person && l.assignedUid !== person) return false;
         if (term) {
-          const hay = [l.name, l.phone, l.city, l.handle, l.message, l.designNumber, l.assignedName].join(' ').toLowerCase();
+          const hay = [l.name, l.phone, l.city, l.handle, l.message, l.designNumber, l.assignedName, l.gstin, l.gstCheck?.legalName, l.gstCheck?.tradeName].join(' ').toLowerCase();
           if (!hay.includes(term)) return false;
         }
         return true;
@@ -187,6 +213,7 @@ export default function LeadsPage() {
             <LeadCard
               key={l.id}
               lead={l}
+              user={user}
               score={s}
               sample={(l.designId && sampleById.get(l.designId)) || (l.designNumber ? sampleByNo.get(l.designNumber.toLowerCase()) : undefined)}
               team={team}
@@ -230,8 +257,9 @@ function waLink(phone: string, text: string) {
 }
 
 function LeadCard({
-  lead: l, score: s, sample, team, manage, mine, me,
+  lead: l, score: s, sample, team, manage, mine, me, user,
 }: {
+  user: User | null;
   lead: Lead;
   score: ReturnType<typeof scoreLead>;
   sample?: Sample;
@@ -243,6 +271,10 @@ function LeadCard({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [told, setTold] = useState<PublicStaff | null>(null);
+  const [gstEdit, setGstEdit] = useState<string | null>(null);
+  const [gstErr, setGstErr] = useState<string | null>(null);
+  const gst = gstLevel(l.gstin, l.gstCheck);
+  const gstInfo = l.gstin ? checkGstin(l.gstin) : null;
   const created = tsToDate(l.createdAt);
   const style = TEMP_STYLE[s.temp];
   const editable = manage || mine;
@@ -260,6 +292,23 @@ function LeadCard({
       : { assignedUid: '', assignedName: '', assignReason: '' });
     setBusy(false);
     if (p) setTold(p);
+  };
+
+  const saveGst = async () => {
+    const v = (gstEdit || '').trim();
+    const g = v ? checkGstin(v) : null;
+    if (g && !g.ok) return setGstErr(g.reason || 'Wrong GST number');
+    setBusy(true);
+    await patch({ gstin: g?.gstin || '', gstCheck: null, ...(g ? { buyerType: 'business' } : {}) });
+    setBusy(false);
+    setGstEdit(null);
+    setGstErr(null);
+  };
+  const checkOnline = async () => {
+    if (!user) return;
+    setBusy(true);
+    setGstErr(await verifyGst(user, l.id).catch((e) => (e as Error).message));
+    setBusy(false);
   };
 
   const addNote = async () => {
@@ -287,7 +336,8 @@ function LeadCard({
             <span className={`rounded-full px-2 py-0.5 text-xs ${LEAD_SOURCES[leadSource(l)]?.color || 'bg-sand'}`}>{LEAD_SOURCES[leadSource(l)]?.label || leadSource(l)}</span>
             {s.repeatCustomer && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Existing customer</span>}
             {!l.assignedUid && l.holdReason && !s.spam && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-ink ring-1 ring-line" title="Lead filter">⏸ On hold: {l.holdReason}</span>}
-            {l.buyerType === 'business' && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Shop / wholesale</span>}
+            {gst !== 'none' && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${GST_LEVEL_STYLE[gst].pill}`}>🧾 {GST_LEVEL_STYLE[gst].label}</span>}
+            {l.buyerType === 'business' && gst === 'none' && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Shop / wholesale</span>}
             {l.buyerType === 'personal' && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-muted">Personal use</span>}
             {l.kind === 'care' && <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs font-medium text-white">Customer care</span>}
           </div>
@@ -298,6 +348,28 @@ function LeadCard({
           </p>
           {l.message && <p className="mt-1.5 rounded-lg bg-sand/60 px-3 py-2 text-sm">“{l.message}”</p>}
           {!s.spam && s.reasons.length > 0 && <p className="mt-1 text-xs text-muted">Why: {s.reasons.join(' · ')}</p>}
+          {(l.gstin || manage) && (
+            <div className="mt-1.5 text-xs">
+              {gstEdit !== null ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <input className="input h-8 w-48 text-xs uppercase" value={gstEdit} onChange={(e) => setGstEdit(e.target.value)} placeholder="GST number" aria-label="GST number" maxLength={18} autoFocus />
+                  <button className="btn btn-sm btn-primary" onClick={saveGst} disabled={busy}>Save</button>
+                  <button className="text-xs underline" onClick={() => { setGstEdit(null); setGstErr(null); }}>Cancel</button>
+                </div>
+              ) : l.gstin ? (
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
+                  <span className="font-mono text-ink" title={l.gstin}>GST {manage || mine ? l.gstin : maskGstin(l.gstin)}</span>
+                  {gstInfo?.ok && <span>{gstInfo.state}{gstInfo.holder ? ` · ${gstInfo.holder}` : ''} · PAN {gstInfo.pan}</span>}
+                  {l.gstCheck?.found && <span className="text-ink">Record: {[l.gstCheck.tradeName, l.gstCheck.legalName].filter((x, i, a) => x && a.indexOf(x) === i).join(' / ')}{l.gstCheck.city ? `, ${l.gstCheck.city}` : ''} · {l.gstCheck.status}</span>}
+                  {gstInfo?.ok && (manage || mine) && <button className="underline" onClick={checkOnline} disabled={busy}>{l.gstCheck ? 'Check again' : 'Check online'}</button>}
+                  {manage && <button className="underline" onClick={() => setGstEdit(l.gstin || '')}>Edit</button>}
+                </p>
+              ) : (
+                <button className="text-muted underline" onClick={() => setGstEdit('')}>+ Add GST number</button>
+              )}
+              {gstErr && <p className="mt-1 text-red-700">{gstErr}</p>}
+            </div>
+          )}
         </div>
         <div className="text-right text-xs text-muted">
           {created ? formatDate(created, true) : 'Just now'}
@@ -401,12 +473,14 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function AddLead({ onClose, samples, team, manage }: { onClose: () => void; samples: Sample[]; team: PublicStaff[]; manage: boolean }) {
   const { profile } = useAuth();
-  const [f, setF] = useState({ name: '', phone: '', city: '', source: 'whatsapp' as LeadSource, design: '', qty: '', message: '', to: '' });
+  const [f, setF] = useState({ name: '', phone: '', city: '', source: 'whatsapp' as LeadSource, design: '', qty: '', message: '', gst: '', to: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.name.trim() && !f.phone.trim()) return setErr('Enter a name or mobile number.');
+    const gst = f.gst.trim() ? checkGstin(f.gst) : null;
+    if (gst && !gst.ok) return setErr(`GST number: ${gst.reason}`);
     setBusy(true);
     const sample = samples.find((s) => String(s.designNumber).toLowerCase() === f.design.trim().toLowerCase());
     // Admins add leads for themselves; managers choose (or leave for auto-transfer)
@@ -422,6 +496,7 @@ function AddLead({ onClose, samples, team, manage }: { onClose: () => void; samp
         designNumber: sample?.designNumber || f.design.trim(),
         category: sample?.category || '',
         qty: Number(f.qty) || 0,
+        ...(gst ? { gstin: gst.gstin, buyerType: 'business' } : {}),
         status: 'new',
         assignedUid: to?.uid || '',
         assignedName: to?.name || '',
@@ -456,6 +531,11 @@ function AddLead({ onClose, samples, team, manage }: { onClose: () => void; samp
           <label className="block"><span className="field-label">Design no.</span><input className="input" list="lead-designs" value={f.design} onChange={(e) => setF({ ...f, design: e.target.value })} /></label>
           <label className="block"><span className="field-label">Pieces (if said)</span><input className="input" type="number" min={0} value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} /></label>
         </div>
+        <label className="block">
+          <span className="field-label">Shop GST number (optional)</span>
+          <input className="input uppercase" value={f.gst} onChange={(e) => setF({ ...f, gst: e.target.value })} placeholder="19ABCDE1234F1Z5" maxLength={18} />
+          {f.gst.trim().length >= 15 && (() => { const g = checkGstin(f.gst); return <span className={`mt-1 block text-xs ${g.ok ? 'text-leaf-800' : 'text-red-700'}`}>{g.ok ? `✓ Valid · ${g.state} · PAN ${g.pan}` : g.reason}</span>; })()}
+        </label>
         <datalist id="lead-designs">{samples.filter((s) => !s.isTrashed).map((s) => <option key={s.id} value={s.designNumber} />)}</datalist>
         <label className="block"><span className="field-label">What they said</span><textarea className="input" rows={2} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} /></label>
         {manage && (
@@ -503,6 +583,22 @@ function FilterSettings({ team, value, onClose }: { team: PublicStaff[]; value: 
               <option value="rotation">Give in rotation like others</option>
               {active.map((t) => <option key={t.uid} value={t.uid}>Give to {t.name}</option>)}
             </select>
+          </div>
+          <div className="mt-3 rounded-xl border border-line bg-ivory p-3">
+            <p className="font-medium">🧾 GST number (shops)</p>
+            <label className="mt-2 flex items-start gap-2.5">
+              <input type="checkbox" className="mt-0.5 size-4 accent-leaf-700" checked={f.gstPass} onChange={(e) => setF({ ...f, gstPass: e.target.checked })} />
+              <span>Valid GST number + mobile → give straight to a Sales Person (no score needed)</span>
+            </label>
+            <label className="mt-2 flex items-start gap-2.5">
+              <input type="checkbox" className="mt-0.5 size-4 accent-leaf-700" checked={f.needGst} onChange={(e) => setF({ ...f, needGst: e.target.checked })} />
+              <span>Shops must give a GST number (hold until they do)</span>
+            </label>
+            <label className="mt-2 flex items-start gap-2.5">
+              <input type="checkbox" className="mt-0.5 size-4 accent-leaf-700" checked={f.gstOnline} onChange={(e) => setF({ ...f, gstOnline: e.target.checked })} />
+              <span>Check GST online — firm name &amp; Active / Cancelled from GST records, matched with the name they gave. Then only <b>Active + name matches</b> goes straight through; cancelled / not found are held. <span className="text-muted">(Paid per check, needs Cashfree keys — see Settings guide.)</span></span>
+            </label>
+            <p className="mt-2 text-xs text-muted">The GST number is checked for typing mistakes for free. PAN and state are read from it — no need to ask for PAN separately.</p>
           </div>
           <p className="mt-2 text-xs text-muted">Leads that don’t pass wait under <b>On hold</b> with the reason — you can still give any of them by hand. Leads from a Sales Person’s own link and existing customers always go straight to their Sales Person.</p>
         </section>

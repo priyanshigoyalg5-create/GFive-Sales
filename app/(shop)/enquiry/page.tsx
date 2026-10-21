@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Loader2, MessageCircle, Send } from 'lucide-react';
+import { checkGstin } from '@/lib/gst';
 import { createLead, getPublicStaff, latestSamples, usePublicSettings } from '@/lib/public-db';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
 import { samplePhotos } from '@/lib/sample-photos';
@@ -31,7 +32,7 @@ function Enquiry() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [seller, setSeller] = useState<PublicStaff | null>(null);
   const [cat, setCat] = useState('');
-  const [f, setF] = useState({ name: '', mobile: '', city: '', design: '', pcs: '', message: '', cats: [] as string[], buyer: '' as '' | 'business' | 'personal' });
+  const [f, setF] = useState({ name: '', mobile: '', city: '', design: '', pcs: '', message: '', gst: '', cats: [] as string[], buyer: '' as '' | 'business' | 'personal' });
   useEffect(() => {
     const c = loadCustomer({ firmName: '', mobile: '', city: '' });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fill saved firm details after hydration
@@ -58,6 +59,8 @@ function Enquiry() {
     if (!f.name.trim()) return setErr('Please write your name or firm name.');
     if (mobile.length < 10) return setErr('Please enter a valid mobile number.');
     if (!f.buyer) return setErr('Please choose: shop / boutique or personal use.');
+    const gst = f.buyer === 'business' && f.gst.trim() ? checkGstin(f.gst) : null;
+    if (gst && !gst.ok) return setErr(`GST number: ${gst.reason}. Leave it empty if you don’t have one.`);
     setErr(null);
     setState('busy');
     try {
@@ -76,8 +79,9 @@ function Enquiry() {
         refUid: seller?.uid || '',
         via: from,
         buyerType: f.buyer,
+        gstin: gst?.gstin || '',
       });
-      saveCustomer({ firmName: f.name.trim(), mobile, city: f.city.trim(), gstNo: '', agentName: '', remarks: '' });
+      saveCustomer({ firmName: f.name.trim(), mobile, city: f.city.trim(), gstNo: gst?.gstin || '', agentName: '', remarks: '' });
       setState('done');
     } catch (e2) {
       console.error(e2);
@@ -166,6 +170,13 @@ function Enquiry() {
                   <button type="button" key={o.id} aria-pressed={f.buyer === o.id} onClick={() => setF({ ...f, buyer: o.id })} className={`chip ${f.buyer === o.id ? 'chip-active' : ''}`}>{o.label}</button>
                 ))}
               </div>
+              {f.buyer === 'business' && (
+                <label className="mt-3 block">
+                  <span className="field-label">Shop GST number <span className="font-normal text-muted">(optional — faster wholesale rates)</span></span>
+                  <input className="input uppercase" value={f.gst} maxLength={18} onChange={(e) => setF({ ...f, gst: e.target.value })} placeholder="e.g. 19ABCDE1234F1Z5" autoComplete="off" spellCheck={false} />
+                  {f.gst.trim().length >= 15 && <GstHint v={f.gst} />}
+                </label>
+              )}
               {f.buyer === 'personal' && settings.website && (
                 <p className="mt-1.5 text-xs text-muted">We mainly sell wholesale. For single pieces you can also shop at <a className="underline" href={settings.website.startsWith('http') ? settings.website : `https://${settings.website}`} target="_blank" rel="noreferrer">{settings.website}</a>.</p>
               )}
@@ -194,5 +205,14 @@ function Enquiry() {
         )}
       </section>
     </div>
+  );
+}
+
+function GstHint({ v }: { v: string }) {
+  const g = checkGstin(v);
+  return g.ok ? (
+    <span className="mt-1 block text-xs text-leaf-800">✓ Valid GST number · {g.state}</span>
+  ) : (
+    <span className="mt-1 block text-xs text-red-700">{g.reason}</span>
   );
 }

@@ -45,7 +45,8 @@ export interface SocialConfig {
 export interface SocialSession {
   leadId?: string;
   name?: string;
-  state?: '' | 'phone_ask';
+  state?: '' | 'phone_ask' | 'gst_ask';
+  gstAsked?: boolean;
   updatedAt?: number;
 }
 
@@ -55,6 +56,8 @@ export interface SocialStore extends BotStore {
   saveSocialSession(key: string, patch: Partial<SocialSession>): Promise<void>;
   sampleForPost(mediaOrPostId: string): Promise<string | null>; // → sample id
   getLeadFilter(): Promise<import('../leads').LeadFilter>;
+  /** Online GST check with a 30-day cache (null = not set up). */
+  checkGst?(gstin: string, names: string[]): Promise<import('../gst').GstCheck | null>;
   savePost(data: { sampleId: string; igMediaId?: string; fbPostId?: string; by: string }): Promise<void>;
 }
 

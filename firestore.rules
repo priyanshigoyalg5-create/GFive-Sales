@@ -124,7 +124,7 @@ service cloud.firestore {
     match /config/{id} {
       allow read, write: if can('settings');
     }
-    // waSessions, waInbound: server only (no client access).
+    // waSessions, waInbound, gstChecks: server only (no client access).
 
     // ---------------------------------------------------------------- leads
     // Enquiries (website call-back, WhatsApp, Instagram, Facebook, added by team).
@@ -135,6 +135,8 @@ service cloud.firestore {
                     && request.resource.data.phone is string && request.resource.data.phone.size() <= 15
                     && request.resource.data.name is string && request.resource.data.name.size() <= 80
                     && request.resource.data.get('message', '').size() <= 500
+                    && request.resource.data.get('gstin', '').size() <= 15
+                    && !('gstCheck' in request.resource.data)
                     && (request.resource.data.assignedUid == ''
                         || activePublicStaff(request.resource.data.assignedUid))
                     && !('createdByUid' in request.resource.data))
