@@ -4,10 +4,10 @@ import { adminDb } from '../server/firebase-admin';
 import { DEFAULT_SETTINGS } from '../settings-defaults';
 import type { CompanySettings, Order, PublicStaff, Sample } from '../types';
 import type { Lead } from '../leads';
-import type { BotConfig, BotStore, WaSession } from './store';
+import { DEFAULT_KEYWORDS, type BotConfig, type SocialConfig, type SocialSession, type SocialStore, type WaSession } from './store';
 
 /** Firestore (firebase-admin) implementation used by the live webhook. */
-export function adminStore(): BotStore {
+export function adminStore(): SocialStore {
   const db = adminDb();
   let samplesCache: Sample[] | null = null;
   let teamCache: PublicStaff[] | null = null;
@@ -90,6 +90,29 @@ export function adminStore(): BotStore {
     },
     async updateLead(id, patch) {
       await db.doc(`leads/${id}`).set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    },
+    // ---------- Instagram / Facebook
+    async getSocialConfig(): Promise<SocialConfig> {
+      const d = (await db.doc('config/social').get()).data() || {};
+      const kw = Array.isArray(d.keywords) && d.keywords.length ? (d.keywords as string[]) : DEFAULT_KEYWORDS;
+      return { on: d.on === true, keywords: kw, showRate: d.showRate === true };
+    },
+    async getSocialSession(key) {
+      return ((await db.doc(`socialSessions/${key}`).get()).data() as SocialSession) || {};
+    },
+    async saveSocialSession(key, patch) {
+      const data: Record<string, unknown> = { ...patch, updatedAt: Date.now() };
+      if (patch.state === '') data.state = FieldValue.delete();
+      await db.doc(`socialSessions/${key}`).set(data, { merge: true });
+    },
+    async sampleForPost(id) {
+      const ig = await db.collection('socialPosts').where('igMediaId', '==', id).limit(1).get();
+      if (!ig.empty) return ig.docs[0].get('sampleId');
+      const fb = await db.collection('socialPosts').where('fbPostId', '==', id).limit(1).get();
+      return fb.empty ? null : fb.docs[0].get('sampleId');
+    },
+    async savePost(data) {
+      await db.collection('socialPosts').add({ ...data, at: FieldValue.serverTimestamp() });
     },
   };
 }

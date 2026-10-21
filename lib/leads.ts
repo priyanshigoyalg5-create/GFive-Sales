@@ -26,6 +26,7 @@ export interface Lead {
   handle?: string; // @instagram / facebook name
   source: LeadSource;
   kind?: 'sales' | 'care'; // 'care' = complaint / customer-care request
+  via?: 'instagram' | 'facebook' | ''; // website form opened from the Instagram / Facebook bio link
   message?: string;
   designId?: string;
   designNumber?: string;
@@ -192,6 +193,11 @@ export function pickAssignee(
   );
   const p = pool[0];
   return p ? { uid: p.uid, name: p.name, reason: 'Fair rotation (fewest open leads)' } : null;
+}
+
+/** Where the lead really came from (bio-link enquiries are saved as website + via). */
+export function leadSource(l: Lead): LeadSource {
+  return (l.via as LeadSource) || l.source;
 }
 
 export function isOpen(l: Lead) {

@@ -9,6 +9,7 @@ import '@fontsource/jost/600.css';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://gfivesales.vercel.app'),
   title: {
     default: 'GFive — Glamour Grace Unlimited',
     template: '%s · GFive',

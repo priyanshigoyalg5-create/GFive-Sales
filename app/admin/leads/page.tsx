@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import {
-  Search, Phone, MessageCircle, Plus, Loader2, Flame, UserCheck, Inbox, Wand2, Settings2, X, CalendarClock, StickyNote, ChevronDown, Send,
+  Search, Phone, MessageCircle, Plus, Link2, Copy, Loader2, Flame, UserCheck, Inbox, Wand2, Settings2, X, CalendarClock, StickyNote, ChevronDown, Send,
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
@@ -13,7 +13,7 @@ import { cldThumb, formatDate, tsToDate } from '@/lib/format';
 import { samplePhotos, sampleLink } from '@/lib/samples';
 import { categoryName } from '@/lib/categories';
 import {
-  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, buildLeadContext, isOpen, normPhone, pickAssignee, scoreLead,
+  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, buildLeadContext, isOpen, leadSource, normPhone, pickAssignee, scoreLead,
   type Lead, type LeadSource, type LeadStatus, type LeadTemp,
 } from '@/lib/leads';
 import type { PublicStaff, Sample } from '@/lib/types';
@@ -38,6 +38,7 @@ export default function LeadsPage() {
   const [person, setPerson] = useState(''); // '' all, 'none' unassigned, uid
   const [adding, setAdding] = useState(false);
   const [showReceivers, setShowReceivers] = useState(false);
+  const [showLinks, setShowLinks] = useState(false);
   const [now] = useState(() => Date.now());
 
   const ctx = useMemo(() => buildLeadContext(orders, leads), [orders, leads]);
@@ -75,7 +76,7 @@ export default function LeadsPage() {
         if (temp === 'spam' ? !s.spam : s.spam) return false;
         if (temp !== 'all' && temp !== 'spam' && s.temp !== temp) return false;
         if (status === 'open' ? !isOpen(l) : status !== 'all' && l.status !== status) return false;
-        if (source && l.source !== source) return false;
+        if (source && leadSource(l) !== source) return false;
         if (person === 'none' ? !!l.assignedUid : person && l.assignedUid !== person) return false;
         if (term) {
           const hay = [l.name, l.phone, l.city, l.handle, l.message, l.designNumber, l.assignedName].join(' ').toLowerCase();
@@ -115,6 +116,9 @@ export default function LeadsPage() {
                 <Settings2 size={16} /> Who gets leads
               </button>
             )}
+            <button className="btn btn-outline" onClick={() => setShowLinks(true)}>
+              <Link2 size={16} /> Bio links
+            </button>
             <button className="btn btn-primary" onClick={() => setAdding(true)}>
               <Plus size={16} /> Add lead
             </button>
@@ -186,6 +190,7 @@ export default function LeadsPage() {
       )}
 
       {adding && <AddLead onClose={() => setAdding(false)} samples={samples} team={team} manage={manage} />}
+      {showLinks && <BioLinks refUid={manage ? '' : uid} onClose={() => setShowLinks(false)} />}
       {showReceivers && <Receivers team={team} receivers={receivers} onClose={() => setShowReceivers(false)} />}
     </>
   );
@@ -270,7 +275,7 @@ function LeadCard({
             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${s.spam ? 'bg-sand text-muted ring-line' : style.pill}`} title={s.reasons.join(' · ')}>
               {!s.spam && <span className={`size-1.5 rounded-full ${style.dot}`} />} {s.spam ? 'Spam' : `${style.label} · ${s.score}`}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${LEAD_SOURCES[l.source]?.color || 'bg-sand'}`}>{LEAD_SOURCES[l.source]?.label || l.source}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${LEAD_SOURCES[leadSource(l)]?.color || 'bg-sand'}`}>{LEAD_SOURCES[leadSource(l)]?.label || leadSource(l)}</span>
             {s.repeatCustomer && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Existing customer</span>}
             {l.kind === 'care' && <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs font-medium text-white">Customer care</span>}
           </div>
@@ -486,6 +491,44 @@ function Receivers({ team, receivers, onClose }: { team: PublicStaff[]; receiver
       >
         {busy && <Loader2 size={16} className="animate-spin" />} Save
       </button>
+    </Modal>
+  );
+}
+
+function BioLinks({ refUid, onClose }: { refUid: string; onClose: () => void }) {
+  const [origin] = useState(() => (typeof window !== 'undefined' ? window.location.origin : ''));
+  const [copied, setCopied] = useState('');
+  const links = [
+    { id: 'instagram', label: 'Instagram bio (@gfiveindia)', url: `${origin}/enquiry?from=instagram${refUid ? `&ref=${refUid}` : ''}` },
+    { id: 'facebook', label: 'Facebook page button / posts', url: `${origin}/enquiry?from=facebook${refUid ? `&ref=${refUid}` : ''}` },
+  ];
+  return (
+    <Modal title="Instagram & Facebook links" onClose={onClose}>
+      <p className="text-sm text-muted">
+        Put these links in the Instagram bio and on the Facebook page. Customers see the newest designs and can send an enquiry — it comes here as an Instagram / Facebook lead
+        {refUid ? ' given to you.' : ' and is given to a Sales Person automatically.'}
+      </p>
+      <div className="mt-4 space-y-3">
+        {links.map((l) => (
+          <div key={l.id}>
+            <span className="field-label">{l.label}</span>
+            <div className="flex gap-2">
+              <input className="input text-sm" readOnly value={l.url} aria-label={l.label} />
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(l.url);
+                  setCopied(l.id);
+                  setTimeout(() => setCopied(''), 1500);
+                }}
+              >
+                <Copy size={15} /> {copied === l.id ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </Modal>
   );
 }

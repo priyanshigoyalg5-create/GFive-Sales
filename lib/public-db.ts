@@ -8,7 +8,7 @@
  * mobile data. Staff pages keep using the full SDK from ./firebase.
  */
 import { useEffect, useState } from 'react';
-import { addDoc, collection, doc, getDoc, getFirestore, runTransaction, serverTimestamp } from 'firebase/firestore/lite';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, orderBy, query, runTransaction, serverTimestamp } from 'firebase/firestore/lite';
 import { app } from './firebase-app';
 import type { CompanySettings, PublicStaff, Sample } from './types';
 import { DEFAULT_SETTINGS } from './settings-defaults';
@@ -18,6 +18,12 @@ const db = getFirestore(app);
 export async function getSample(id: string): Promise<Sample | null> {
   const snap = await getDoc(doc(db, 'samples', id));
   return snap.exists() ? ({ ...(snap.data() as Omit<Sample, 'id'>), id: snap.id } as Sample) : null;
+}
+
+/** Newest designs for the public link-in-bio page. */
+export async function latestSamples(n = 24): Promise<Sample[]> {
+  const snap = await getDocs(query(collection(db, 'samples'), orderBy('createdAt', 'desc'), limit(n)));
+  return snap.docs.map((d) => ({ ...(d.data() as Omit<Sample, 'id'>), id: d.id }) as Sample).filter((s) => !s.isTrashed);
 }
 
 /** Public name + WhatsApp of a staff member (customer order links). */
@@ -53,6 +59,7 @@ export async function createOrder(data: Record<string, unknown>): Promise<string
 export async function createLead(data: {
   name: string; phone: string; city: string; message: string; designId: string; designNumber: string; category: string; qty: number;
   sellerUid: string; sellerName: string; refUid: string;
+  via?: 'instagram' | 'facebook' | '';
 }): Promise<void> {
   await addDoc(collection(db, 'leads'), {
     name: data.name.slice(0, 80),
@@ -64,6 +71,7 @@ export async function createLead(data: {
     category: data.category,
     qty: data.qty,
     source: 'website',
+    via: data.via || '', // came from the Instagram / Facebook bio link
     status: 'new',
     refUid: data.refUid,
     assignedUid: data.sellerUid,

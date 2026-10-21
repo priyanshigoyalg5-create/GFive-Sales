@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Play, X } from 'lucide-react';
+import { Search, PlusCircle, MessageCircle, Link2, Pencil, Trash2, RotateCcw, ExternalLink, Check, Images, Loader2, Sparkles, Play, X, Megaphone } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { useOrders, useSamples } from '@/lib/hooks';
@@ -14,6 +14,7 @@ import PageHeader from '@/components/admin/PageHeader';
 import { CATEGORIES, categoryName, normCategory } from '@/lib/categories';
 import type { Sample } from '@/lib/types';
 import AiStudio from '@/components/admin/AiStudio';
+import PostToSocial from '@/components/admin/PostToSocial';
 import Lightbox from '@/components/Lightbox';
 
 export default function AdminSamplesPage() {
@@ -31,6 +32,7 @@ export default function AdminSamplesPage() {
   const [sel, setSel] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [aiFor, setAiFor] = useState<Sample | null>(null);
+  const [postFor, setPostFor] = useState<Sample | null>(null);
   const [gallery, setGallery] = useState<{ s: Sample; index: number } | null>(null);
   const [playing, setPlaying] = useState<Sample | null>(null);
 
@@ -239,6 +241,11 @@ export default function AdminSamplesPage() {
                         <button className="btn btn-sm btn-whatsapp w-full" onClick={() => shareSampleOnWhatsApp(s, uid, profile?.name)}>
                           <MessageCircle size={14} /> Share
                         </button>
+                        {can('socialPost') && photos.length > 0 && (
+                          <button className="btn btn-sm btn-outline mt-2 w-full" onClick={() => setPostFor(s)}>
+                            <Megaphone size={14} /> Post to Instagram / Facebook
+                          </button>
+                        )}
                         {can('aiMedia') && photos.some((u) => !s.aiImages?.includes(u)) && (
                           <button className="btn btn-sm btn-outline mt-2 w-full !border-gold-500/50 !text-gold-600" onClick={() => setAiFor(s)}>
                             <Sparkles size={14} /> AI model photo / video
@@ -278,6 +285,7 @@ export default function AdminSamplesPage() {
           })}
         </div>
       )}
+      {postFor && <PostToSocial sample={postFor} onClose={() => setPostFor(null)} />}
       {gallery && (() => {
         const imgs = samplePhotos(gallery.s);
         return (

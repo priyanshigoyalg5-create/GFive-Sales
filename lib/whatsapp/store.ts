@@ -34,3 +34,27 @@ export interface BotStore {
   createLead(data: Omit<Lead, 'id'>): Promise<string>;
   updateLead(id: string, patch: Partial<Lead>): Promise<void>;
 }
+
+/** Instagram / Facebook (Meta) side — same database. */
+export interface SocialConfig {
+  on: boolean; // auto-replies to DMs and comments
+  keywords: string[]; // comment words that trigger a private DM
+  showRate: boolean; // put the rate in post captions
+}
+
+export interface SocialSession {
+  leadId?: string;
+  name?: string;
+  state?: '' | 'phone_ask';
+  updatedAt?: number;
+}
+
+export interface SocialStore extends BotStore {
+  getSocialConfig(): Promise<SocialConfig>;
+  getSocialSession(key: string): Promise<SocialSession>;
+  saveSocialSession(key: string, patch: Partial<SocialSession>): Promise<void>;
+  sampleForPost(mediaOrPostId: string): Promise<string | null>; // → sample id
+  savePost(data: { sampleId: string; igMediaId?: string; fbPostId?: string; by: string }): Promise<void>;
+}
+
+export const DEFAULT_KEYWORDS = ['price', 'rate', 'pp', 'details', 'detail', 'dm', 'kitna', 'cost', 'order', 'available', 'wholesale', 'interested'];
