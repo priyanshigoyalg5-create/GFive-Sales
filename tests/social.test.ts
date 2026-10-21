@@ -7,8 +7,9 @@ import type { Lead } from '../lib/leads';
 import type { Sample } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/settings-defaults';
 import { DEFAULT_KEYWORDS } from '../lib/whatsapp/store';
+import { DEFAULT_FILTER, type LeadFilter } from '../lib/leads';
 
-function world(on = true) {
+function world(on = true, filter: Partial<LeadFilter> = {}) {
   const leads = new Map<string, Lead>();
   const sess = new Map<string, SocialSession>();
   const seen = new Set<string>();
@@ -19,7 +20,7 @@ function world(on = true) {
   const store = {
     async claimMessage(id: string) { if (seen.has(id)) return false; seen.add(id); return true; },
     async getConfig() { return { on: true, testNumbers: [], provider: 'meta' as const }; },
-    async getSettings() { return { ...DEFAULT_SETTINGS, whatsappNumber: '917044440614' }; },
+    async getSettings() { return { ...DEFAULT_SETTINGS, whatsappNumber: '917044440614', website: 'gfive.co.in' }; },
     async getSession() { return {}; },
     async saveSession() {},
     async samples() { return samples; },
@@ -35,6 +36,7 @@ function world(on = true) {
     async saveSocialSession(k: string, p: Partial<SocialSession>) { const c = { ...(sess.get(k) || {}), ...p }; if (p.state === '') delete c.state; sess.set(k, c); },
     async sampleForPost(id: string) { return id === 'IGMEDIA1' ? 's2' : null; },
     async savePost() {},
+    async getLeadFilter() { return { ...DEFAULT_FILTER, ...filter }; },
   } satisfies SocialStore;
   const calls: { fn: string; args: unknown[] }[] = [];
   const rec = (fn: string) => async (...args: unknown[]) => { calls.push({ fn, args }); return {}; };
@@ -51,45 +53,83 @@ function world(on = true) {
 
 const igDM = (text: string, mid = 'm' + Math.random()) => ({ object: 'instagram', entry: [{ id: 'IG1', messaging: [{ sender: { id: 'IGSID9' }, recipient: { id: 'IG1' }, message: { mid, text } }] }] });
 
-test('Instagram DM "hi" → lead (Instagram, handle) + menu with quick replies', async () => {
+const tap = (payload: string, title = payload) => ({ object: 'instagram', entry: [{ messaging: [{ sender: { id: 'IGSID9' }, message: { mid: 'q' + Math.random(), text: title, quick_reply: { payload } } }] }] });
+const dmTexts = (w: ReturnType<typeof world>) => w.calls.filter((c) => c.fn === 'sendDM').map((c) => String(c.args[2]));
+const lastDM = (w: ReturnType<typeof world>) => w.calls.filter((c) => c.fn === 'sendDM').pop()!;
+
+test('Instagram "hi" → lead ON HOLD (no mobile yet), not given to a Sales Person', async () => {
   const w = world();
   await handleMetaWebhook(igDM('hi'), w.deps);
   const l = [...w.leads.values()][0];
   assert.equal(l.source, 'instagram');
   assert.equal(l.handle, '@meenaboutique');
-  assert.equal(l.assignedUid, 'u3');
-  const dm = w.calls.find((c) => c.fn === 'sendDM')!;
-  assert.equal(dm.args[0], 'instagram');
-  assert.ok((dm.args[3] as unknown[]).length >= 3);
+  assert.equal(l.assignedUid, '');
+  assert.equal(l.holdReason, 'Waiting for mobile number');
+  assert.ok((lastDM(w).args[3] as unknown[]).length >= 3); // menu
 });
 
-test('DM with a design number → photo + details + order link with ref & from', async () => {
+test('qualifying chat: shop → pieces → mobile → given to Sales Person with thank-you', async () => {
+  const w = world();
+  await handleMetaWebhook(igDM('hi'), w.deps);
+  await handleMetaWebhook(tap('NEW', '🆕 Naye designs'), w.deps);
+  assert.match(dmTexts(w).pop()!, /kis liye/); // asks buyer type
+  await handleMetaWebhook(tap('BIZ', '🏬 Shop / boutique'), w.deps);
+  assert.match(dmTexts(w).pop()!, /kitne pieces/);
+  await handleMetaWebhook(tap('Q_MID', '10–49 pcs'), w.deps);
+  assert.match(dmTexts(w).pop()!, /mobile number/);
+  assert.equal([...w.leads.values()][0].assignedUid, '');
+  await handleMetaWebhook(igDM('9830012345'), w.deps);
+  const l = [...w.leads.values()][0];
+  assert.equal(l.assignedUid, 'u3');
+  assert.equal(l.buyerType, 'business');
+  assert.equal(l.qty, 20);
+  assert.equal(l.phone, '919830012345');
+  assert.match(dmTexts(w).pop()!, /Priya aapko \+919830012345 par jaldi call karenge/);
+});
+
+test('personal buyer → polite reply with retail store, stays on hold', async () => {
+  const w = world();
+  await handleMetaWebhook(igDM('hi'), w.deps);
+  await handleMetaWebhook(tap('PERSONAL', '🙋 Apne liye'), w.deps);
+  const l = [...w.leads.values()][0];
+  assert.equal(l.assignedUid, '');
+  assert.match(dmTexts(w).pop()!, /wholesale[\s\S]*gfive\.co\.in/);
+});
+
+test('settings can send personal buyers to one person', async () => {
+  const w = world(true, { personal: 'give', personalTo: 'u3', needPhone: false, minScore: 0 });
+  await handleMetaWebhook(igDM('apne liye ek suit chahiye'), w.deps);
+  assert.equal([...w.leads.values()][0].assignedUid, 'u3');
+});
+
+test('DM with a design number → photo + details + order link, then asks buyer type', async () => {
   const w = world();
   await handleMetaWebhook(igDM('RZ0138 price?'), w.deps);
   assert.ok(w.calls.some((c) => c.fn === 'sendDMImage'));
-  const t = String(w.calls.filter((c) => c.fn === 'sendDM').pop()!.args[2]);
-  assert.match(t, /Design #RZ0138[\s\S]*\/s\/s2\?ref=u3&from=instagram/);
+  const t = dmTexts(w);
+  assert.ok(t.some((x) => /Design #RZ0138[\s\S]*\/s\/s2\?from=instagram/.test(x)));
+  assert.match(t.pop()!, /kis liye/);
 });
 
-test('DM with mobile number saves the phone on the lead', async () => {
+test('free text "shop hai, 50 pcs, 9830099999" qualifies in one message', async () => {
   const w = world();
-  await handleMetaWebhook(igDM('hi'), w.deps);
-  await handleMetaWebhook(igDM('mera number 98300 12345'), w.deps);
+  await handleMetaWebhook(igDM('RZ0138 boutique ke liye 50 pcs chahiye 9830099999'), w.deps);
   const l = [...w.leads.values()][0];
-  assert.equal(l.phone, '919830012345');
-  assert.equal(w.leads.size, 1);
+  assert.equal(l.assignedUid, 'u3');
+  assert.equal(l.qty, 50);
 });
 
-test('Instagram comment "price" on a posted design → private DM with that design + public reply + comment lead', async () => {
+test('Instagram comment "price" on a posted design → private DM asks SHOP/PERSONAL + public reply; lead on hold', async () => {
   const w = world();
   await handleMetaWebhook({ object: 'instagram', entry: [{ id: 'IG1', changes: [{ field: 'comments', value: { id: 'C1', text: 'Price pls', from: { id: 'U7', username: 'rahul_tex' }, media: { id: 'IGMEDIA1' } } }] }] }, w.deps);
   const pr = w.calls.find((c) => c.fn === 'privateReply')!;
   assert.equal(pr.args[0], 'C1');
-  assert.match(String(pr.args[1]), /Design #RZ0138[\s\S]*\/s\/s2\?ref=u3&from=instagram/);
+  assert.match(String(pr.args[1]), /Design #RZ0138[\s\S]*\/s\/s2\?from=instagram[\s\S]*SHOP/);
   assert.ok(w.calls.some((c) => c.fn === 'publicReply' && c.args[1] === 'C1'));
   const l = [...w.leads.values()][0];
   assert.equal(l.source, 'comment');
-  assert.equal(l.handle, '@rahul_tex');
+  assert.equal(l.assignedUid, '');
+  assert.equal(l.holdReason, 'Waiting for mobile number');
 });
 
 test('normal comment ("nice 😍") and our own comments are ignored; duplicates once', async () => {

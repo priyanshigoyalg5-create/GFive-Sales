@@ -60,6 +60,7 @@ export async function createLead(data: {
   name: string; phone: string; city: string; message: string; designId: string; designNumber: string; category: string; qty: number;
   sellerUid: string; sellerName: string; refUid: string;
   via?: 'instagram' | 'facebook' | '';
+  buyerType?: 'business' | 'personal' | '';
 }): Promise<void> {
   await addDoc(collection(db, 'leads'), {
     name: data.name.slice(0, 80),
@@ -72,6 +73,7 @@ export async function createLead(data: {
     qty: data.qty,
     source: 'website',
     via: data.via || '', // came from the Instagram / Facebook bio link
+    buyerType: data.buyerType || '',
     status: 'new',
     refUid: data.refUid,
     assignedUid: data.sellerUid,

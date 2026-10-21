@@ -7,19 +7,20 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { useLeadReceivers, useLeads, useOrders, useSamples } from '@/lib/hooks';
+import { useLeadFilter, useLeads, useOrders, useSamples } from '@/lib/hooks';
 import { useStaffList } from '@/lib/staff';
 import { cldThumb, formatDate, tsToDate } from '@/lib/format';
 import { samplePhotos, sampleLink } from '@/lib/samples';
 import { categoryName } from '@/lib/categories';
 import {
-  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, buildLeadContext, isOpen, leadSource, normPhone, pickAssignee, scoreLead,
+  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, assignWithFilter, buildLeadContext, isOpen, leadSource, normPhone, qualifies, scoreLead,
+  type LeadFilter,
   type Lead, type LeadSource, type LeadStatus, type LeadTemp,
 } from '@/lib/leads';
 import type { PublicStaff, Sample } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
 
-type TempFilter = 'all' | LeadTemp | 'spam';
+type TempFilter = 'all' | LeadTemp | 'spam' | 'hold';
 
 export default function LeadsPage() {
   const { profile, can } = useAuth();
@@ -29,7 +30,7 @@ export default function LeadsPage() {
   const { orders } = useOrders();
   const { samples } = useSamples();
   const team = useStaffList(true);
-  const receivers = useLeadReceivers();
+  const filter = useLeadFilter();
 
   const [q, setQ] = useState('');
   const [temp, setTemp] = useState<TempFilter>('all');
@@ -50,23 +51,29 @@ export default function LeadsPage() {
   const assigning = useRef(false);
   useEffect(() => {
     if (!manage || assigning.current || !team.length) return;
-    const todo = scored.filter(({ l, s }) => !l.assignedUid && !s.spam && isOpen(l));
+    // only leads that pass the lead filter are given; the rest wait in "On hold" with the reason
+    const todo = scored.filter(({ l, s }) => !l.assignedUid && !s.spam && isOpen(l) && (qualifies(l, s, filter).ok || l.holdReason !== qualifies(l, s, filter).reason));
     if (!todo.length) return;
     assigning.current = true;
     const open = new Map<string, number>();
     leads.forEach((l) => l.assignedUid && isOpen(l) && open.set(l.assignedUid, (open.get(l.assignedUid) || 0) + 1));
     (async () => {
-      for (const { l } of todo) {
-        const who = pickAssignee(l, ctx, team, receivers, open);
-        if (!who) break;
+      for (const { l, s } of todo) {
+        const q = qualifies(l, s, filter);
+        const who = q.ok ? assignWithFilter(l, ctx, team, filter, open) : null;
+        const hold = q.ok ? (who ? '' : 'Every Sales Person is at the lead limit') : q.reason;
+        if (!who) {
+          if (l.holdReason !== hold) await updateDoc(doc(db, 'leads', l.id), { holdReason: hold }).catch((e) => console.error('hold', e));
+          continue;
+        }
         open.set(who.uid, (open.get(who.uid) || 0) + 1);
         await updateDoc(doc(db, 'leads', l.id), {
-          assignedUid: who.uid, assignedName: who.name, assignReason: `Auto · ${who.reason}`, assignedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          assignedUid: who.uid, assignedName: who.name, assignReason: `Auto · ${who.reason}`, holdReason: '', assignedAt: serverTimestamp(), updatedAt: serverTimestamp(),
         }).catch((e) => console.error('auto-assign', e));
       }
       assigning.current = false;
     })();
-  }, [manage, scored, team, receivers, ctx, leads]);
+  }, [manage, scored, team, filter, ctx, leads]);
 
   // ---------- filters
   const shown = useMemo(() => {
@@ -74,7 +81,8 @@ export default function LeadsPage() {
     return scored
       .filter(({ l, s }) => {
         if (temp === 'spam' ? !s.spam : s.spam) return false;
-        if (temp !== 'all' && temp !== 'spam' && s.temp !== temp) return false;
+        if (temp === 'hold' && (l.assignedUid || !l.holdReason)) return false;
+        if (temp !== 'all' && temp !== 'spam' && temp !== 'hold' && s.temp !== temp) return false;
         if (status === 'open' ? !isOpen(l) : status !== 'all' && l.status !== status) return false;
         if (source && leadSource(l) !== source) return false;
         if (person === 'none' ? !!l.assignedUid : person && l.assignedUid !== person) return false;
@@ -95,6 +103,7 @@ export default function LeadsPage() {
       today: scored.filter(({ l }) => (tsToDate(l.createdAt)?.getTime() || now) >= today.getTime()).length,
       hot: open.filter(({ s }) => s.temp === 'hot').length,
       unassigned: open.filter(({ l }) => !l.assignedUid).length,
+      hold: open.filter(({ l }) => !l.assignedUid && !!l.holdReason).length,
       due: open.filter(({ l }) => l.followUpAt && l.followUpAt <= now + 86_400_000).length,
     };
   }, [scored, now]);
@@ -113,7 +122,7 @@ export default function LeadsPage() {
           <div className="flex flex-wrap gap-2">
             {manage && (
               <button className="btn btn-outline" onClick={() => setShowReceivers(true)}>
-                <Settings2 size={16} /> Who gets leads
+                <Settings2 size={16} /> Lead filter
               </button>
             )}
             <button className="btn btn-outline" onClick={() => setShowLinks(true)}>
@@ -130,7 +139,7 @@ export default function LeadsPage() {
         <Stat label="New today" value={stats.today} icon={Inbox} />
         <Stat label="Hot (open)" value={stats.hot} icon={Flame} tone="text-red-700" />
         <Stat label="Follow-up due" value={stats.due} icon={CalendarClock} />
-        {manage ? <Stat label="Not given yet" value={stats.unassigned} icon={Wand2} /> : <Stat label="Open leads" value={scored.filter(({ l, s }) => isOpen(l) && !s.spam).length} icon={UserCheck} />}
+        {manage ? <Stat label="On hold (filter)" value={stats.hold} icon={Wand2} /> : <Stat label="Open leads" value={scored.filter(({ l, s }) => isOpen(l) && !s.spam).length} icon={UserCheck} />}
       </div>
 
       <div className="card mb-4 space-y-3 p-3 sm:p-4">
@@ -157,9 +166,9 @@ export default function LeadsPage() {
           </Select>
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Lead filter">
-          {(['all', 'hot', 'warm', 'cold', 'spam'] as TempFilter[]).map((t) => (
+          {((manage ? ['all', 'hot', 'warm', 'cold', 'hold', 'spam'] : ['all', 'hot', 'warm', 'cold', 'spam']) as TempFilter[]).map((t) => (
             <button key={t} onClick={() => setTemp(t)} aria-pressed={temp === t} className={`chip ${temp === t ? 'chip-active' : ''}`}>
-              {t === 'all' ? 'All' : t === 'spam' ? 'Spam' : <><span className={`size-2 rounded-full ${TEMP_STYLE[t].dot}`} /> {TEMP_STYLE[t].label}</>}
+              {t === 'all' ? 'All' : t === 'spam' ? 'Spam' : t === 'hold' ? `On hold (${stats.hold})` : <><span className={`size-2 rounded-full ${TEMP_STYLE[t].dot}`} /> {TEMP_STYLE[t].label}</>}
             </button>
           ))}
         </div>
@@ -191,7 +200,7 @@ export default function LeadsPage() {
 
       {adding && <AddLead onClose={() => setAdding(false)} samples={samples} team={team} manage={manage} />}
       {showLinks && <BioLinks refUid={manage ? '' : uid} onClose={() => setShowLinks(false)} />}
-      {showReceivers && <Receivers team={team} receivers={receivers} onClose={() => setShowReceivers(false)} />}
+      {showReceivers && <FilterSettings team={team} value={filter} onClose={() => setShowReceivers(false)} />}
     </>
   );
 }
@@ -277,6 +286,9 @@ function LeadCard({
             </span>
             <span className={`rounded-full px-2 py-0.5 text-xs ${LEAD_SOURCES[leadSource(l)]?.color || 'bg-sand'}`}>{LEAD_SOURCES[leadSource(l)]?.label || leadSource(l)}</span>
             {s.repeatCustomer && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Existing customer</span>}
+            {!l.assignedUid && l.holdReason && !s.spam && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-ink ring-1 ring-line" title="Lead filter">⏸ On hold: {l.holdReason}</span>}
+            {l.buyerType === 'business' && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Shop / wholesale</span>}
+            {l.buyerType === 'personal' && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-muted">Personal use</span>}
             {l.kind === 'care' && <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs font-medium text-white">Customer care</span>}
           </div>
           <p className="mt-0.5 text-sm text-muted">
@@ -462,29 +474,61 @@ function AddLead({ onClose, samples, team, manage }: { onClose: () => void; samp
   );
 }
 
-function Receivers({ team, receivers, onClose }: { team: PublicStaff[]; receivers: string[]; onClose: () => void }) {
-  const [sel, setSel] = useState<string[]>(receivers);
+function FilterSettings({ team, value, onClose }: { team: PublicStaff[]; value: LeadFilter; onClose: () => void }) {
+  const [f, setF] = useState<LeadFilter>(value);
   const [busy, setBusy] = useState(false);
   const active = team.filter((t) => t.active !== false);
   return (
-    <Modal title="Who gets new leads" onClose={onClose}>
-      <p className="text-sm text-muted">
-        New leads go automatically: first to the Sales Person whose link the customer used, then to the Sales Person of an existing customer, otherwise in turn to the people ticked here (whoever has the fewest open leads). Nobody ticked = everyone.
-      </p>
-      <div className="mt-4 space-y-1">
-        {active.map((t) => (
-          <label key={t.uid} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-sand/60">
-            <input type="checkbox" className="size-4 accent-leaf-700" checked={sel.includes(t.uid)} onChange={(e) => setSel((p) => (e.target.checked ? [...p, t.uid] : p.filter((x) => x !== t.uid)))} />
-            {t.name}
+    <Modal title="Lead filter" onClose={onClose}>
+      <div className="space-y-5 text-sm">
+        <section>
+          <p className="font-medium">Instagram &amp; Facebook leads are given to a Sales Person only when:</p>
+          <label className="mt-2 flex items-center gap-2.5">
+            <input type="checkbox" className="size-4 accent-leaf-700" checked={f.needPhone} onChange={(e) => setF({ ...f, needPhone: e.target.checked })} />
+            they have shared a mobile number
           </label>
-        ))}
+          <label className="mt-2 block">
+            <span className="field-label">Minimum lead score ({f.minScore})</span>
+            <input type="range" min={0} max={90} step={5} value={f.minScore} onChange={(e) => setF({ ...f, minScore: Number(e.target.value) })} className="w-full accent-leaf-700" aria-label="Minimum lead score" />
+            <span className="text-xs text-muted">0 = any · 45 = asked about a design or rate · 60+ = only hot leads</span>
+          </label>
+          <label className="mt-2 block">
+            <span className="field-label">Minimum pieces (if they said a number)</span>
+            <input className="input w-32" type="number" min={0} value={f.minPcs} onChange={(e) => setF({ ...f, minPcs: Math.max(0, Number(e.target.value) || 0) })} />
+          </label>
+          <div className="mt-2">
+            <span className="field-label">People buying for personal use</span>
+            <select className="input" value={f.personal === 'hold' ? 'hold' : f.personalTo || 'rotation'} onChange={(e) => setF(e.target.value === 'hold' ? { ...f, personal: 'hold' } : { ...f, personal: 'give', personalTo: e.target.value === 'rotation' ? '' : e.target.value })} aria-label="Personal buyers">
+              <option value="hold">Keep on hold (bot sends them to the retail store)</option>
+              <option value="rotation">Give in rotation like others</option>
+              {active.map((t) => <option key={t.uid} value={t.uid}>Give to {t.name}</option>)}
+            </select>
+          </div>
+          <p className="mt-2 text-xs text-muted">Leads that don’t pass wait under <b>On hold</b> with the reason — you can still give any of them by hand. Leads from a Sales Person’s own link and existing customers always go straight to their Sales Person.</p>
+        </section>
+        <section>
+          <span className="field-label">Max open leads per Sales Person (0 = no limit)</span>
+          <input className="input w-32" type="number" min={0} value={f.maxOpen} onChange={(e) => setF({ ...f, maxOpen: Math.max(0, Number(e.target.value) || 0) })} />
+        </section>
+        <section>
+          <p className="font-medium">Who gets new leads (in turn, fewest open leads first)</p>
+          <p className="text-xs text-muted">Nobody ticked = everyone.</p>
+          <div className="mt-2 space-y-1">
+            {active.map((t) => (
+              <label key={t.uid} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-sand/60">
+                <input type="checkbox" className="size-4 accent-leaf-700" checked={f.receivers.includes(t.uid)} onChange={(e) => setF({ ...f, receivers: e.target.checked ? [...f.receivers, t.uid] : f.receivers.filter((x) => x !== t.uid) })} />
+                {t.name}
+              </label>
+            ))}
+          </div>
+        </section>
       </div>
       <button
-        className="btn btn-primary mt-4 h-11 w-full"
+        className="btn btn-primary mt-5 h-11 w-full"
         disabled={busy}
         onClick={async () => {
           setBusy(true);
-          await setDoc(doc(db, 'settings', 'leads'), { receivers: sel }, { merge: true });
+          await setDoc(doc(db, 'settings', 'leads'), { ...f }, { merge: true });
           setBusy(false);
           onClose();
         }}

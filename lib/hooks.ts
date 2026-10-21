@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Order, Sample } from './types';
-import type { Lead } from './leads';
+import { DEFAULT_FILTER, readFilter, type Lead, type LeadFilter } from './leads';
 import { doc } from 'firebase/firestore';
 import { useAuth } from './auth';
 import { tsToDate } from './format';
@@ -100,17 +100,17 @@ export function useLeads(enabled = true) {
   return { leads, loading };
 }
 
-/** Who receives new leads (settings/leads.receivers; empty = every active Sales Person). */
-export function useLeadReceivers() {
-  const [receivers, setReceivers] = useState<string[]>([]);
+/** Lead filter + who receives new leads (settings/leads). */
+export function useLeadFilter(): LeadFilter {
+  const [f, setF] = useState<LeadFilter>(DEFAULT_FILTER);
   useEffect(
     () =>
       onSnapshot(
         doc(db, 'settings', 'leads'),
-        (s) => setReceivers((s.data()?.receivers as string[]) || []),
-        () => setReceivers([]),
+        (s) => setF(readFilter(s.data())),
+        () => setF(DEFAULT_FILTER),
       ),
     [],
   );
-  return receivers;
+  return f;
 }

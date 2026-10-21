@@ -76,6 +76,7 @@ Enquiries from the website call-back form ("Not ready to order yet?" on every de
 
 - **Lead filter** (`lib/leads.ts` → `scoreLead`): 0–100 score → Hot / Warm / Cold; spam detection; repeat customers (phone matches an old order) and repeat enquiries get a boost. The "Why" line shows the reasons.
 - **Auto-transfer** (`pickAssignee`): 1) Sales Person whose link the customer used, 2) Sales Person of the customer's last order, 3) fair rotation to whoever has the fewest open leads among "Who gets leads" (`settings/leads.receivers`, empty = everyone). Runs when a lead manager opens the page (later: in the WhatsApp/Instagram webhook).
+- **Lead filter for Instagram / Facebook** (`qualifies`, Leads → Lead filter): such leads reach a Sales Person only with a mobile number, as a shop / wholesale buyer, above a minimum score (and optional minimum pieces / max open leads per person). The DM bot asks the missing things (buyer type → pieces → mobile); personal buyers get the retail store link. Others wait under **On hold** with the reason. Leads from a Sales Person's own link and existing customers always go straight through.
 - Admins see only their own leads (status, follow-up date, notes); Super Admin / Sub Admin with **See & transfer all leads** see all and can transfer, then tell the new Sales Person on WhatsApp in one tap.
 
 ## WhatsApp bot (Settings → WhatsApp bot)

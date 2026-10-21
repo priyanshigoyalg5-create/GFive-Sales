@@ -31,7 +31,7 @@ function Enquiry() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [seller, setSeller] = useState<PublicStaff | null>(null);
   const [cat, setCat] = useState('');
-  const [f, setF] = useState({ name: '', mobile: '', city: '', design: '', pcs: '', message: '', cats: [] as string[] });
+  const [f, setF] = useState({ name: '', mobile: '', city: '', design: '', pcs: '', message: '', cats: [] as string[], buyer: '' as '' | 'business' | 'personal' });
   useEffect(() => {
     const c = loadCustomer({ firmName: '', mobile: '', city: '' });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fill saved firm details after hydration
@@ -57,6 +57,7 @@ function Enquiry() {
     const mobile = digitsOnly(f.mobile);
     if (!f.name.trim()) return setErr('Please write your name or firm name.');
     if (mobile.length < 10) return setErr('Please enter a valid mobile number.');
+    if (!f.buyer) return setErr('Please choose: shop / boutique or personal use.');
     setErr(null);
     setState('busy');
     try {
@@ -74,6 +75,7 @@ function Enquiry() {
         sellerName: seller?.name || '',
         refUid: seller?.uid || '',
         via: from,
+        buyerType: f.buyer,
       });
       saveCustomer({ firmName: f.name.trim(), mobile, city: f.city.trim(), gstNo: '', agentName: '', remarks: '' });
       setState('done');
@@ -153,6 +155,20 @@ function Enquiry() {
             <div className="grid grid-cols-2 gap-3">
               <label className="block"><span className="field-label">Mobile *</span><input className="input" type="tel" inputMode="tel" value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} autoComplete="tel" /></label>
               <label className="block"><span className="field-label">City</span><input className="input" value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} autoComplete="address-level2" /></label>
+            </div>
+            <div>
+              <span className="field-label">You are buying for *</span>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Buying for">
+                {([
+                  { id: 'business', label: '🏬 Shop / boutique / wholesale' },
+                  { id: 'personal', label: '🙋 Personal use' },
+                ] as const).map((o) => (
+                  <button type="button" key={o.id} aria-pressed={f.buyer === o.id} onClick={() => setF({ ...f, buyer: o.id })} className={`chip ${f.buyer === o.id ? 'chip-active' : ''}`}>{o.label}</button>
+                ))}
+              </div>
+              {f.buyer === 'personal' && settings.website && (
+                <p className="mt-1.5 text-xs text-muted">We mainly sell wholesale. For single pieces you can also shop at <a className="underline" href={settings.website.startsWith('http') ? settings.website : `https://${settings.website}`} target="_blank" rel="noreferrer">{settings.website}</a>.</p>
+              )}
             </div>
             <div>
               <span className="field-label">Interested in</span>

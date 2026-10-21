@@ -3,7 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '../server/firebase-admin';
 import { DEFAULT_SETTINGS } from '../settings-defaults';
 import type { CompanySettings, Order, PublicStaff, Sample } from '../types';
-import type { Lead } from '../leads';
+import { readFilter, type Lead } from '../leads';
 import { DEFAULT_KEYWORDS, type BotConfig, type SocialConfig, type SocialSession, type SocialStore, type WaSession } from './store';
 
 /** Firestore (firebase-admin) implementation used by the live webhook. */
@@ -110,6 +110,9 @@ export function adminStore(): SocialStore {
       if (!ig.empty) return ig.docs[0].get('sampleId');
       const fb = await db.collection('socialPosts').where('fbPostId', '==', id).limit(1).get();
       return fb.empty ? null : fb.docs[0].get('sampleId');
+    },
+    async getLeadFilter() {
+      return readFilter((await db.doc('settings/leads').get()).data());
     },
     async savePost(data) {
       await db.collection('socialPosts').add({ ...data, at: FieldValue.serverTimestamp() });
