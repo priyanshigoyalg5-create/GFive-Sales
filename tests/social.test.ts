@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS } from '../lib/settings-defaults';
 import { DEFAULT_KEYWORDS } from '../lib/whatsapp/store';
 import { DEFAULT_FILTER, type LeadFilter } from '../lib/leads';
 
-function world(on = true, filter: Partial<LeadFilter> = {}) {
+function world(on = true, filter: Partial<LeadFilter> = {}, extra: Partial<SocialStore> = {}) {
   const leads = new Map<string, Lead>();
   const sess = new Map<string, SocialSession>();
   const seen = new Set<string>();
@@ -38,6 +38,7 @@ function world(on = true, filter: Partial<LeadFilter> = {}) {
     async savePost() {},
     async getLeadFilter() { return { ...DEFAULT_FILTER, ...filter }; },
   } satisfies SocialStore;
+  Object.assign(store, extra);
   const calls: { fn: string; args: unknown[] }[] = [];
   const rec = (fn: string) => async (...args: unknown[]) => { calls.push({ fn, args }); return {}; };
   const api: SocialApi = {
@@ -157,4 +158,40 @@ test('post caption hides rate by default and invites PRICE comments', () => {
   assert.match(c, /comment karein "PRICE"/);
   assert.doesNotMatch(c, /₹1,595/);
   assert.match(c, /\n\n🛒 Order/);
+});
+
+// ---------------------------------------------------------------- GST
+const GOOD_GST = '29AAICP2912R1ZR'; // valid check digit (Cashfree docs example)
+
+test('held shop lead is asked for GST; a valid GST number sends it straight to a Sales Person', async () => {
+  const w = world(true, { minScore: 80 });
+  await handleMetaWebhook(igDM('hi'), w.deps);
+  await handleMetaWebhook(tap('BIZ'), w.deps);
+  await handleMetaWebhook(tap('Q_SMALL'), w.deps);
+  await handleMetaWebhook(igDM('9830012345'), w.deps);
+  assert.equal([...w.leads.values()][0].assignedUid, '');
+  assert.match(dmTexts(w).pop()!, /GST number/);
+  await handleMetaWebhook(igDM(`mera gst ${GOOD_GST.toLowerCase()}`), w.deps);
+  const l = [...w.leads.values()][0];
+  assert.equal(l.gstin, GOOD_GST);
+  assert.equal(l.assignedUid, 'u3');
+  assert.match(dmTexts(w).pop()!, /Priya/);
+});
+
+test('wrong GST number → asked again, not saved', async () => {
+  const w = world();
+  await handleMetaWebhook(igDM('hi'), w.deps);
+  await handleMetaWebhook(igDM('29AAICP2912R1ZX'), w.deps);
+  assert.match(dmTexts(w).pop()!, /sahi nahi/);
+  assert.equal([...w.leads.values()][0].gstin, undefined);
+});
+
+test('online check: cancelled GST is held even with mobile', async () => {
+  const w = world(true, { gstOnline: true }, {
+    async checkGst() { return { found: true, active: false, status: 'Cancelled', legalName: 'X', tradeName: '', type: '', city: '', nameMatch: false, at: 1 }; },
+  });
+  await handleMetaWebhook(igDM(`shop hai 9830012345 ${GOOD_GST}`), w.deps);
+  const l = [...w.leads.values()][0];
+  assert.equal(l.assignedUid, '');
+  assert.equal(l.holdReason, 'GST Cancelled');
 });

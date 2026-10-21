@@ -4,6 +4,8 @@ import { adminDb } from '../server/firebase-admin';
 import { DEFAULT_SETTINGS } from '../settings-defaults';
 import type { CompanySettings, Order, PublicStaff, Sample } from '../types';
 import { readFilter, type Lead } from '../leads';
+import { namesMatch, type GstCheck } from '../gst';
+import { gstOnlineReady, verifyGstOnline } from '../server/gst-verify';
 import { DEFAULT_KEYWORDS, type BotConfig, type SocialConfig, type SocialSession, type SocialStore, type WaSession } from './store';
 
 /** Firestore (firebase-admin) implementation used by the live webhook. */
@@ -113,6 +115,15 @@ export function adminStore(): SocialStore {
     },
     async getLeadFilter() {
       return readFilter((await db.doc('settings/leads').get()).data());
+    },
+    async checkGst(gstin, names) {
+      if (!gstOnlineReady()) return null;
+      const ref = db.doc(`gstChecks/${gstin}`);
+      const cached = (await ref.get()).data() as GstCheck | undefined;
+      if (cached && Date.now() - cached.at < 30 * 86_400_000) return { ...cached, nameMatch: cached.found && namesMatch(names, [cached.legalName, cached.tradeName]) };
+      const check = await verifyGstOnline(gstin, names);
+      await ref.set({ ...check, by: 'Instagram / Facebook bot' });
+      return check;
     },
     async savePost(data) {
       await db.collection('socialPosts').add({ ...data, at: FieldValue.serverTimestamp() });

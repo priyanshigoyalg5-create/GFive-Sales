@@ -1,6 +1,7 @@
 import type { Order, PublicStaff } from './types';
 import { digitsOnly, tsToDate } from './format';
 import type { Timestamp } from 'firebase/firestore';
+import { gstLevel, type GstCheck } from './gst';
 
 /**
  * Leads = people who showed interest but have not ordered yet (WhatsApp, Instagram,
@@ -28,6 +29,9 @@ export interface Lead {
   kind?: 'sales' | 'care'; // 'care' = complaint / customer-care request
   via?: 'instagram' | 'facebook' | ''; // website form opened from the Instagram / Facebook bio link
   buyerType?: 'business' | 'personal' | ''; // shop / boutique / wholesaler vs own use
+  firm?: string; // shop / firm name (matched with the GST record)
+  gstin?: string; // GST number (shops)
+  gstCheck?: GstCheck | null; // online GST check result
   holdReason?: string; // why the lead filter has not given it to a Sales Person yet
   message?: string;
   designId?: string;
@@ -130,7 +134,24 @@ export function scoreLead(l: Lead, ctx?: LeadContext): LeadScore {
     reasons.push('Mobile number given');
   }
   if (l.city) s += 5;
-  if (l.buyerType === 'business') {
+  const gst = gstLevel(l.gstin, l.gstCheck);
+  if (gst === 'verified') {
+    s += 35;
+    reasons.push('GST verified · name matches');
+  } else if (gst === 'mismatch') {
+    s += 20;
+    reasons.push('GST active · name is different');
+  } else if (gst === 'valid') {
+    s += 25;
+    reasons.push('Valid GST number');
+  } else if (gst === 'invalid' || gst === 'notfound') {
+    s -= 15;
+    reasons.push(gst === 'invalid' ? 'GST number is wrong' : 'GST number not found');
+  } else if (gst === 'inactive') {
+    s -= 20;
+    reasons.push(`GST ${l.gstCheck?.status || 'inactive'}`);
+  }
+  if (l.buyerType === 'business' || gst === 'valid' || gst === 'verified' || gst === 'mismatch') {
     s += 15;
     reasons.push('Shop / wholesale buyer');
   } else if (l.buyerType === 'personal') {
@@ -213,9 +234,12 @@ export interface LeadFilter {
   personal: 'hold' | 'give'; // people buying for own use
   personalTo: string; // uid who gets personal buyers when personal = 'give' ('' = rotation)
   maxOpen: number; // max open leads per Sales Person (0 = no limit)
+  gstPass: boolean; // valid GST number (+ mobile) → straight to a Sales Person, no score needed
+  needGst: boolean; // shop buyers from Instagram / Facebook must give a GST number
+  gstOnline: boolean; // check GST numbers online (paid, needs Cashfree keys)
 }
 
-export const DEFAULT_FILTER: LeadFilter = { receivers: [], minScore: 45, needPhone: true, minPcs: 0, personal: 'hold', personalTo: '', maxOpen: 0 };
+export const DEFAULT_FILTER: LeadFilter = { receivers: [], minScore: 45, needPhone: true, minPcs: 0, personal: 'hold', personalTo: '', maxOpen: 0, gstPass: true, needGst: false, gstOnline: false };
 
 export function readFilter(d: Record<string, unknown> | undefined | null): LeadFilter {
   const n = (v: unknown, def: number) => (typeof v === 'number' && Number.isFinite(v) ? v : def);
@@ -227,6 +251,9 @@ export function readFilter(d: Record<string, unknown> | undefined | null): LeadF
     personal: d?.personal === 'give' ? 'give' : 'hold',
     personalTo: typeof d?.personalTo === 'string' ? (d.personalTo as string) : '',
     maxOpen: n(d?.maxOpen, 0),
+    gstPass: d?.gstPass === undefined ? DEFAULT_FILTER.gstPass : d.gstPass === true,
+    needGst: d?.needGst === true,
+    gstOnline: d?.gstOnline === true,
   };
 }
 
@@ -248,7 +275,13 @@ export function qualifies(l: Lead, s: LeadScore, f: LeadFilter): { ok: boolean; 
   if (!isSocial(l)) return { ok: true, reason: '' };
   const phone = normPhone(l.phone);
   if (f.needPhone && !(phone.length >= 12 && phone.length <= 13)) return { ok: false, reason: 'Waiting for mobile number' };
+  const gst = gstLevel(l.gstin, l.gstCheck);
+  if (gst === 'inactive') return { ok: false, reason: `GST ${l.gstCheck?.status || 'inactive'}` };
+  if (gst === 'notfound') return { ok: false, reason: 'GST number not found' };
+  // GST verified online with matching name (or, without the online check, a valid GST number)
+  if (f.gstPass && (gst === 'verified' || (gst === 'valid' && !f.gstOnline))) return { ok: true, reason: '' };
   if (l.buyerType === 'personal' && f.personal === 'hold') return { ok: false, reason: 'Personal use (not wholesale)' };
+  if (f.needGst && l.buyerType !== 'personal' && (gst === 'none' || gst === 'invalid')) return { ok: false, reason: gst === 'invalid' ? 'GST number is wrong' : 'Waiting for GST number' };
   if (f.minPcs > 0 && (l.qty || 0) > 0 && (l.qty || 0) < f.minPcs) return { ok: false, reason: `Only ${l.qty} pcs (min ${f.minPcs})` };
   if (s.score < f.minScore) return { ok: false, reason: `Low score ${s.score} (min ${f.minScore})` };
   return { ok: true, reason: '' };
