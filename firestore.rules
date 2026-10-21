@@ -137,6 +137,7 @@ service cloud.firestore {
                     && request.resource.data.get('message', '').size() <= 500
                     && request.resource.data.get('gstin', '').size() <= 15
                     && !('gstCheck' in request.resource.data)
+                    && (!('interest' in request.resource.data) || request.resource.data.interest.size() <= 3)
                     && (request.resource.data.assignedUid == ''
                         || activePublicStaff(request.resource.data.assignedUid))
                     && !('createdByUid' in request.resource.data))

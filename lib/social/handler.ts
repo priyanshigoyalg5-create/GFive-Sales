@@ -13,14 +13,14 @@ import { samplePhotos } from '../sample-photos';
 import type { Sample } from '../types';
 import { findDesign } from '../whatsapp/bot';
 import type { SocialStore } from '../whatsapp/store';
-import type { Platform, QuickReply } from './graph';
+import type { Platform, Profile, QuickReply } from './graph';
 
 export interface SocialApi {
   sendDM(p: Platform, to: string, text: string, quick?: QuickReply[]): Promise<unknown>;
   sendDMImage(p: Platform, to: string, url: string): Promise<unknown>;
   privateReply(commentId: string, text: string): Promise<unknown>;
   publicReply(p: Platform, commentId: string, text: string): Promise<unknown>;
-  profileName(p: Platform, userId: string): Promise<{ name: string; handle: string }>;
+  profileName(p: Platform, userId: string): Promise<Profile>;
 }
 
 export interface SocialDeps {
@@ -31,11 +31,23 @@ export interface SocialDeps {
   now?: () => number;
 }
 
+interface Referral {
+  source?: string; // "ADS", "SHORTLINK", …
+  ad_id?: string;
+  ads_context_data?: { ad_title?: string };
+}
 interface MessagingEvent {
   sender?: { id: string };
   recipient?: { id: string };
-  message?: { mid?: string; text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: unknown[] };
-  postback?: { mid?: string; payload?: string; title?: string };
+  message?: { mid?: string; text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: unknown[]; referral?: Referral };
+  postback?: { mid?: string; payload?: string; title?: string; referral?: Referral };
+  referral?: Referral;
+}
+
+/** Ad id when the chat was opened from a Click-to-Instagram / Messenger ad. */
+export function adFrom(e: MessagingEvent): string {
+  const r = e.referral || e.message?.referral || e.postback?.referral;
+  return r && (r.source || '').toUpperCase() === 'ADS' ? r.ad_id || 'ad' : '';
 }
 interface Change {
   field?: string;
@@ -77,7 +89,7 @@ async function ensureLead(
   d: SocialDeps,
   platform: Platform,
   userId: string,
-  first: { text: string; source: 'instagram' | 'facebook' | 'comment'; design: Sample | null; name?: string; handle?: string },
+  first: { text: string; source: 'instagram' | 'facebook' | 'comment'; design: Sample | null; name?: string; handle?: string; fromAd?: string },
 ) {
   const key = `${platform}_${userId}`;
   const sess = await d.store.getSocialSession(key);
@@ -85,7 +97,9 @@ async function ensureLead(
     const l = await d.store.getLead(sess.leadId);
     if (l && l.status !== 'converted' && l.status !== 'lost') return { lead: l, key, sess, created: false };
   }
-  const who0 = first.name || first.handle ? { name: first.name || '', handle: first.handle || '' } : await d.api.profileName(platform, userId);
+  // comments carry the name; DMs ask Meta (also gives Instagram followers / follows us)
+  const who0: Profile = first.source !== 'comment' ? await d.api.profileName(platform, userId) : { name: first.name || '', handle: first.handle || '' };
+  if (!who0.name && !who0.handle) Object.assign(who0, { name: first.name || '', handle: first.handle || '' });
   const draft: Lead = {
     id: '',
     name: who0.name || who0.handle || '',
@@ -102,6 +116,9 @@ async function ensureLead(
     assignedName: '',
     holdReason: 'New — checking',
     notes: [],
+    ...(who0.followers != null ? { igFollowers: who0.followers } : {}),
+    ...(who0.followsUs != null ? { followsUs: who0.followsUs } : {}),
+    ...(first.fromAd ? { fromAd: first.fromAd } : {}),
   };
   const lead = draft;
   const id = await d.store.createLead({ ...lead, socialId: `${platform}:${userId}` } as unknown as Omit<Lead, 'id'>);
@@ -177,7 +194,8 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
   const design = text && !gstRaw ? findDesign(text, samples) : null;
   const f = await d.store.getLeadFilter();
 
-  const got = await ensureLead(d, platform, userId, { text, source: platform, design });
+  const fromAd = adFrom(e);
+  const got = await ensureLead(d, platform, userId, { text, source: platform, design, fromAd });
   const { key, sess, created } = got;
   const notes = [...(got.lead.notes || []), { at: (d.now || Date.now)(), by: platform === 'instagram' ? 'Instagram DM' : 'Messenger', text: text || '[photo / sticker]' }].slice(-30);
   const phone = PHONE.exec(text)?.[1]?.replace(/\D/g, '');
@@ -187,6 +205,7 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
     ...answers,
     ...(design ? { designId: design.id, designNumber: String(design.designNumber), category: design.category || '' } : {}),
     ...(phone ? { phone: `91${phone}` } : {}),
+    ...(fromAd && !got.lead.fromAd ? { fromAd } : {}),
   };
   if (gst?.ok) {
     patch.gstin = gst.gstin;

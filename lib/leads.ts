@@ -32,6 +32,10 @@ export interface Lead {
   firm?: string; // shop / firm name (matched with the GST record)
   gstin?: string; // GST number (shops)
   gstCheck?: GstCheck | null; // online GST check result
+  interest?: { designs: number; visits: number; firstSeen: number } | null; // designs seen on our website (their browser)
+  igFollowers?: number | null; // Instagram followers of the person who DMed
+  followsUs?: boolean | null; // they follow our Instagram account
+  fromAd?: string; // ad id when they came from a Click-to-DM ad
   holdReason?: string; // why the lead filter has not given it to a Sales Person yet
   message?: string;
   designId?: string;
@@ -158,6 +162,24 @@ export function scoreLead(l: Lead, ctx?: LeadContext): LeadScore {
     s -= 20;
     reasons.push('Personal use');
   }
+  const seen = l.interest?.designs || 0;
+  const visits = l.interest?.visits || 0;
+  if (seen >= 3 || visits >= 2) {
+    s += seen >= 8 || visits >= 4 ? 15 : 10;
+    reasons.push(`Saw ${seen} design${seen === 1 ? '' : 's'} on our site${visits > 1 ? ` · ${visits} visits` : ''}`);
+  }
+  if (l.followsUs) {
+    s += 10;
+    reasons.push('Follows our Instagram');
+  }
+  if ((l.igFollowers || 0) >= 1000) {
+    s += 5;
+    reasons.push(`Instagram ${compact(l.igFollowers!)} followers`);
+  }
+  if (l.fromAd) {
+    s += 5;
+    reasons.push('Came from our ad');
+  }
   if (l.source === 'website' || l.source === 'whatsapp') s += 5; // they reached out directly
   if (l.status === 'interested') {
     s += 15;
@@ -177,6 +199,10 @@ export function scoreLead(l: Lead, ctx?: LeadContext): LeadScore {
   const score = Math.max(0, Math.min(100, s));
   const temp: LeadTemp = score >= 60 ? 'hot' : score >= 35 ? 'warm' : 'cold';
   return { score, temp, spam: false, duplicate, repeatCustomer: !!cust, reasons };
+}
+
+export function compact(n: number) {
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
 }
 
 export function buildLeadContext(orders: Order[], leads: Lead[]): LeadContext {
