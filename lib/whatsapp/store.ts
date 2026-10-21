@@ -54,6 +54,7 @@ export interface SocialStore extends BotStore {
   getSocialSession(key: string): Promise<SocialSession>;
   saveSocialSession(key: string, patch: Partial<SocialSession>): Promise<void>;
   sampleForPost(mediaOrPostId: string): Promise<string | null>; // → sample id
+  getLeadFilter(): Promise<import('../leads').LeadFilter>;
   savePost(data: { sampleId: string; igMediaId?: string; fbPostId?: string; by: string }): Promise<void>;
 }
 

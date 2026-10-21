@@ -7,7 +7,7 @@
  */
 import { categoryName } from '../categories';
 import { inr } from '../format';
-import { buildLeadContext, pickAssignee, type Lead } from '../leads';
+import { assignWithFilter, buildLeadContext, isOpen, qualifies, scoreLead, type Lead } from '../leads';
 import { samplePhotos } from '../sample-photos';
 import type { Sample } from '../types';
 import { findDesign } from '../whatsapp/bot';
@@ -85,7 +85,6 @@ async function ensureLead(
     if (l && l.status !== 'converted' && l.status !== 'lost') return { lead: l, key, sess, created: false };
   }
   const who0 = first.name || first.handle ? { name: first.name || '', handle: first.handle || '' } : await d.api.profileName(platform, userId);
-  const [team, receivers, openCount] = await Promise.all([d.store.team(), d.store.receivers(), d.store.openLeadCounts()]);
   const draft: Lead = {
     id: '',
     name: who0.name || who0.handle || '',
@@ -98,16 +97,63 @@ async function ensureLead(
     designNumber: first.design ? String(first.design.designNumber) : '',
     category: first.design?.category || '',
     status: 'new',
-    assignedUid: '',
+    assignedUid: '', // the lead filter decides (screen) — not every Instagram chat goes to a Sales Person
     assignedName: '',
+    holdReason: 'New — checking',
     notes: [],
   };
-  const who = pickAssignee(draft, buildLeadContext([], []), team, receivers, openCount);
-  const lead = { ...draft, assignedUid: who?.uid || '', assignedName: who?.name || '', assignReason: who ? `Auto · ${who.reason}` : '' };
+  const lead = draft;
   const id = await d.store.createLead({ ...lead, socialId: `${platform}:${userId}` } as unknown as Omit<Lead, 'id'>);
   await d.store.saveSocialSession(key, { leadId: id, name: lead.name, updatedAt: (d.now || Date.now)() });
   return { lead: { ...lead, id }, key, sess, created: true };
 }
+
+/**
+ * Lead filter for Instagram / Facebook: give the lead to a Sales Person only when it
+ * passes (mobile number, shop / wholesale buyer, score, pieces — Lead filter settings).
+ */
+export async function screen(d: SocialDeps, lead: Lead): Promise<Lead> {
+  if (lead.assignedUid || !isOpen(lead)) return lead;
+  const [orders, f, team, openCount] = await Promise.all([lead.phone ? d.store.ordersByPhone(lead.phone) : Promise.resolve([]), d.store.getLeadFilter(), d.store.team(), d.store.openLeadCounts()]);
+  const ctx = buildLeadContext(orders, []);
+  const sc = scoreLead(lead, ctx);
+  const q = qualifies(lead, sc, f);
+  const who = q.ok ? assignWithFilter(lead, ctx, team, f, openCount) : null;
+  if (who) {
+    const patch = { assignedUid: who.uid, assignedName: who.name, assignReason: `Auto · ${who.reason}`, holdReason: '' };
+    await d.store.updateLead(lead.id, patch);
+    return { ...lead, ...patch };
+  }
+  const holdReason = q.ok ? 'Every Sales Person is at the lead limit' : q.reason;
+  if (holdReason !== lead.holdReason) await d.store.updateLead(lead.id, { holdReason });
+  return { ...lead, holdReason };
+}
+
+const BIZ = /\b(shop|boutique|wholesale|wholesaler|retailer|dukaan|dukan|business|trader|showroom|reseller|store)\b/i;
+const PERSONAL = /\b(personal|apne liye|khud|self|myself|ghar ke liye|own use|for me)\b/i;
+const PCS = /(\d{1,4})\s*(pcs|pc|pieces?|sets?|nos)\b/i;
+
+/** Pull buyer type / pieces from a reply (quick-reply payload or free text). */
+export function readAnswers(text: string, payload: string): Partial<Lead> {
+  const out: Partial<Lead> = {};
+  if (payload === 'BIZ' || BIZ.test(text)) out.buyerType = 'business';
+  else if (payload === 'PERSONAL' || PERSONAL.test(text)) out.buyerType = 'personal';
+  const qp = { Q_SMALL: 5, Q_MID: 20, Q_BIG: 50 }[payload as 'Q_SMALL' | 'Q_MID' | 'Q_BIG'];
+  const qt = PCS.exec(text)?.[1];
+  if (qp) out.qty = qp;
+  else if (qt) out.qty = Number(qt);
+  return out;
+}
+
+const askType = (): QuickReply[] => [
+  { title: '🏬 Shop / boutique', payload: 'BIZ' },
+  { title: '🙋 Apne liye', payload: 'PERSONAL' },
+];
+const askPcs = (): QuickReply[] => [
+  { title: '1–9 pcs', payload: 'Q_SMALL' },
+  { title: '10–49 pcs', payload: 'Q_MID' },
+  { title: '50+ pcs', payload: 'Q_BIG' },
+];
 
 const menu = (): QuickReply[] => [
   { title: '🆕 Naye designs', payload: 'NEW' },
@@ -127,31 +173,44 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
   const samples = (await d.store.samples()).filter((s) => !s.isTrashed);
   const design = text ? findDesign(text, samples) : null;
 
-  const { lead, key, sess, created } = await ensureLead(d, platform, userId, { text, source: platform, design });
-  const notes = [...(lead.notes || []), { at: (d.now || Date.now)(), by: platform === 'instagram' ? 'Instagram DM' : 'Messenger', text: text || '[photo / sticker]' }].slice(-30);
+  const got = await ensureLead(d, platform, userId, { text, source: platform, design });
+  const { key, sess, created } = got;
+  const notes = [...(got.lead.notes || []), { at: (d.now || Date.now)(), by: platform === 'instagram' ? 'Instagram DM' : 'Messenger', text: text || '[photo / sticker]' }].slice(-30);
   const phone = PHONE.exec(text)?.[1]?.replace(/\D/g, '');
-  await d.store.updateLead(lead.id, { notes, ...(design ? { designId: design.id, designNumber: String(design.designNumber), category: design.category || '' } : {}), ...(phone ? { phone: `91${phone}` } : {}) });
+  const answers = readAnswers(text, payload);
+  const patch: Partial<Lead> = {
+    notes,
+    ...answers,
+    ...(design ? { designId: design.id, designNumber: String(design.designNumber), category: design.category || '' } : {}),
+    ...(phone ? { phone: `91${phone}` } : {}),
+  };
+  await d.store.updateLead(got.lead.id, patch);
+  const before = got.lead.assignedUid;
+  const lead = await screen(d, { ...got.lead, ...patch }); // lead filter
   if (!cfg.on) return; // leads still recorded; no automatic answer
 
   const ref = lead.assignedUid;
   const say = (t: string, q: QuickReply[] = menu()) => d.api.sendDM(platform, userId, t, q);
+  const f = await d.store.getLeadFilter();
 
-  if (phone) {
-    await d.store.saveSocialSession(key, { state: '' });
-    return void (await say(`Shukriya 🙏 ${lead.assignedName || 'Hamare Sales Person'} aapko +91 ${phone} par jaldi call karenge.`, []));
+  // ---------- answers to the bot's own questions (buyer type → pieces → mobile)
+  if (answers.buyerType === 'personal' && f.personal === 'hold') {
+    const st = await d.store.getSettings();
+    return void (await say(`Shukriya 🙏 Hum wholesale (shop / boutique) ke liye kaam karte hain.${st.website ? `\nApne liye kharidne ke liye hamara online store dekhein 👇\n${st.website}` : ''}`, []));
   }
-  if (sess.state === 'phone_ask' && text) {
-    await d.store.saveSocialSession(key, { state: '' });
-    return void (await say('Mobile number 10 digit mein bhejein (jaise 98xxxxxxxx), taaki hum call kar sakein.', []));
+  if (lead.assignedUid && !before) {
+    return void (await say(`Shukriya 🙏 ${lead.assignedName} aapko${lead.phone ? ` +${lead.phone}` : ''} par jaldi call karenge. Tab tak naye designs dekhein 👇\n${bioUrl(d, platform, ref)}`, []));
   }
   if (design) {
     const ph = samplePhotos(design)[0];
     if (ph) await d.api.sendDMImage(platform, userId, ph.replace('/upload/', '/upload/w_1080,h_1350,c_limit,f_jpg,q_80/')).catch(() => {});
-    return void (await say(`${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}`));
+    await say(`${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}`, []);
+    return void (await nextQuestion(d, platform, userId, key, lead));
   }
   switch (payload) {
     case 'NEW':
-      return void (await say(`✨ Naye designs (photo, rate, order) yahan dekhein 👇\n${bioUrl(d, platform, ref)}`));
+      await say(`✨ Naye designs (photo, rate, order) yahan dekhein 👇\n${bioUrl(d, platform, ref)}`, []);
+      return void (await nextQuestion(d, platform, userId, key, lead));
     case 'RATE':
       return void (await say('Design no. bhejein (jaise RZ0138), ya post ka screenshot bhejein — hum rate aur colours bata denge.', []));
     case 'CALL':
@@ -161,14 +220,30 @@ async function handleDM(d: SocialDeps, platform: Platform, e: MessagingEvent) {
       const team = await d.store.team();
       const sp = team.find((t) => t.uid === lead.assignedUid);
       const st = await d.store.getSettings();
-      const wa = sp?.whatsappNumber || st.whatsappNumber;
-      return void (await say(`WhatsApp par baat karein 👇\nhttps://wa.me/${wa}`, []));
+      return void (await say(`WhatsApp par baat karein 👇\nhttps://wa.me/${sp?.whatsappNumber || st.whatsappNumber}`, []));
     }
   }
-  if (created || /^(hi+|hello|hey|namaste|menu|start)\b/i.test(text)) {
-    return void (await say(`Namaste 🙏 GFive Kolkata — designer unstitched suits (wholesale).\nKya dekhna hai?`));
+  if (sess.state === 'phone_ask' && text && !phone) {
+    return void (await say('Mobile number 10 digit mein bhejein (jaise 98xxxxxxxx), taaki hum call kar sakein.', []));
   }
+  if (answers.buyerType || answers.qty || phone) return void (await nextQuestion(d, platform, userId, key, lead));
+  if (created || /^(hi+|hello|hey|namaste|menu|start)\b/i.test(text)) {
+    await say(`Namaste 🙏 GFive Kolkata — designer unstitched suits (wholesale).\nKya dekhna hai?`);
+    return;
+  }
+  if (!lead.assignedUid) return void (await nextQuestion(d, platform, userId, key, lead));
   await say('Aapka message mil gaya 🙏 Hamare Sales Person jaldi jawab denge. Tab tak:');
+}
+
+/** Ask the one missing thing the lead filter needs: buyer type → pieces → mobile. */
+async function nextQuestion(d: SocialDeps, platform: Platform, userId: string, key: string, lead: Lead) {
+  if (lead.assignedUid) return;
+  if (!lead.buyerType) return void (await d.api.sendDM(platform, userId, 'Aap kis liye lena chahte hain?', askType()));
+  if (lead.buyerType === 'business' && !lead.qty) return void (await d.api.sendDM(platform, userId, 'Ek design mein lagbhag kitne pieces chahiye?', askPcs()));
+  if (!lead.phone) {
+    await d.store.saveSocialSession(key, { state: 'phone_ask' });
+    return void (await d.api.sendDM(platform, userId, 'Apna mobile number bhejein — hamare Sales Person rate aur colours ke saath call karenge 📞', []));
+  }
 }
 
 async function handleComment(d: SocialDeps, platform: Platform, v: NonNullable<Change['value']>) {
@@ -197,11 +272,12 @@ async function handleComment(d: SocialDeps, platform: Platform, v: NonNullable<C
   await d.store.updateLead(lead.id, {
     notes: [...(lead.notes || []), { at: (d.now || Date.now)(), by: platform === 'instagram' ? 'Instagram comment' : 'Facebook comment', text }].slice(-30),
   });
+  await screen(d, lead);
   if (!cfg.on) return;
   const ref = lead.assignedUid;
   const dm = design
-    ? `Namaste 🙏 Aapne Design #${design.designNumber} ke baare mein poocha:\n\n${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}\n\nMobile number bhejein toh ${lead.assignedName || 'hamare Sales Person'} call karenge.`
-    : `Namaste 🙏 GFive Kolkata se. Naye designs, rate aur order yahan 👇\n${bioUrl(d, platform, ref)}\n\nDesign no. ya mobile number bhejein, hum turant bata denge.`;
+    ? `Namaste 🙏 Aapne Design #${design.designNumber} ke baare mein poocha:\n\n${caption(design, true)}\n\nSaare colours dekhein aur order karein 👇\n${designUrl(d, design, platform, ref)}\n\nAap shop / boutique ke liye lena chahte hain? Reply karein *SHOP* ya *PERSONAL*, aur apna mobile number bhejein — hamare Sales Person call karenge.`
+    : `Namaste 🙏 GFive Kolkata se. Naye designs, rate aur order yahan 👇\n${bioUrl(d, platform, ref)}\n\nShop / boutique ke liye? Reply karein *SHOP* ya *PERSONAL*, aur design no. ya mobile number bhejein.`;
   await d.api.privateReply(commentId, dm).catch((e) => console.error('private reply', e));
   await d.api.publicReply(platform, commentId, 'Aapko DM kiya hai 🙏 Please check your messages.').catch((e) => console.error('public reply', e));
 }

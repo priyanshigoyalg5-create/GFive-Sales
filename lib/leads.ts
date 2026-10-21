@@ -27,6 +27,8 @@ export interface Lead {
   source: LeadSource;
   kind?: 'sales' | 'care'; // 'care' = complaint / customer-care request
   via?: 'instagram' | 'facebook' | ''; // website form opened from the Instagram / Facebook bio link
+  buyerType?: 'business' | 'personal' | ''; // shop / boutique / wholesaler vs own use
+  holdReason?: string; // why the lead filter has not given it to a Sales Person yet
   message?: string;
   designId?: string;
   designNumber?: string;
@@ -128,6 +130,13 @@ export function scoreLead(l: Lead, ctx?: LeadContext): LeadScore {
     reasons.push('Mobile number given');
   }
   if (l.city) s += 5;
+  if (l.buyerType === 'business') {
+    s += 15;
+    reasons.push('Shop / wholesale buyer');
+  } else if (l.buyerType === 'personal') {
+    s -= 20;
+    reasons.push('Personal use');
+  }
   if (l.source === 'website' || l.source === 'whatsapp') s += 5; // they reached out directly
   if (l.status === 'interested') {
     s += 15;
@@ -193,6 +202,68 @@ export function pickAssignee(
   );
   const p = pool[0];
   return p ? { uid: p.uid, name: p.name, reason: 'Fair rotation (fewest open leads)' } : null;
+}
+
+/** Lead filter settings (settings/leads). */
+export interface LeadFilter {
+  receivers: string[]; // [] = everyone active
+  minScore: number; // social leads need at least this score
+  needPhone: boolean; // social leads need a mobile number
+  minPcs: number; // if they said how many pieces: at least this many (0 = any)
+  personal: 'hold' | 'give'; // people buying for own use
+  personalTo: string; // uid who gets personal buyers when personal = 'give' ('' = rotation)
+  maxOpen: number; // max open leads per Sales Person (0 = no limit)
+}
+
+export const DEFAULT_FILTER: LeadFilter = { receivers: [], minScore: 45, needPhone: true, minPcs: 0, personal: 'hold', personalTo: '', maxOpen: 0 };
+
+export function readFilter(d: Record<string, unknown> | undefined | null): LeadFilter {
+  const n = (v: unknown, def: number) => (typeof v === 'number' && Number.isFinite(v) ? v : def);
+  return {
+    receivers: Array.isArray(d?.receivers) ? (d!.receivers as string[]) : [],
+    minScore: n(d?.minScore, DEFAULT_FILTER.minScore),
+    needPhone: d?.needPhone === undefined ? DEFAULT_FILTER.needPhone : d.needPhone === true,
+    minPcs: n(d?.minPcs, 0),
+    personal: d?.personal === 'give' ? 'give' : 'hold',
+    personalTo: typeof d?.personalTo === 'string' ? (d.personalTo as string) : '',
+    maxOpen: n(d?.maxOpen, 0),
+  };
+}
+
+/** Instagram / Facebook / post comment / bio link: noisy sources that go through the filter. */
+export function isSocial(l: Lead) {
+  const src = leadSource(l);
+  return src === 'instagram' || src === 'facebook' || src === 'comment';
+}
+
+/**
+ * The gate before a lead reaches a Sales Person. Social leads must look like a real
+ * trade buyer (mobile number, business buyer, enough score / pieces); everything else
+ * only has to be non-spam. A lead from a Sales Person's own link always goes to them.
+ */
+export function qualifies(l: Lead, s: LeadScore, f: LeadFilter): { ok: boolean; reason: string } {
+  if (s.spam) return { ok: false, reason: 'Spam' };
+  if (l.refUid) return { ok: true, reason: '' };
+  if (s.repeatCustomer) return { ok: true, reason: '' };
+  if (!isSocial(l)) return { ok: true, reason: '' };
+  const phone = normPhone(l.phone);
+  if (f.needPhone && !(phone.length >= 12 && phone.length <= 13)) return { ok: false, reason: 'Waiting for mobile number' };
+  if (l.buyerType === 'personal' && f.personal === 'hold') return { ok: false, reason: 'Personal use (not wholesale)' };
+  if (f.minPcs > 0 && (l.qty || 0) > 0 && (l.qty || 0) < f.minPcs) return { ok: false, reason: `Only ${l.qty} pcs (min ${f.minPcs})` };
+  if (s.score < f.minScore) return { ok: false, reason: `Low score ${s.score} (min ${f.minScore})` };
+  return { ok: true, reason: '' };
+}
+
+/** pickAssignee + filter rules (personal buyers' person, per-person limit). */
+export function assignWithFilter(l: Lead, ctx: LeadContext, team: PublicStaff[], f: LeadFilter, openCount: Map<string, number>) {
+  const active = team.filter((t) => t.active !== false);
+  if (l.buyerType === 'personal' && f.personal === 'give' && f.personalTo) {
+    const p = active.find((t) => t.uid === f.personalTo);
+    if (p) return { uid: p.uid, name: p.name, reason: 'Personal buyer' };
+  }
+  const under = f.maxOpen > 0 ? active.filter((t) => (openCount.get(t.uid) || 0) < f.maxOpen) : active;
+  const who = pickAssignee(l, ctx, l.refUid ? active : under, f.receivers, openCount);
+  return who;
 }
 
 /** Where the lead really came from (bio-link enquiries are saved as website + via). */
