@@ -291,6 +291,7 @@ export default function SampleOrderPage() {
         sellerUid: seller?.uid || '',
         sellerName: seller?.name || '',
         refUid: new URLSearchParams(window.location.search).get('ref') || '',
+        via: (['instagram', 'facebook'] as const).find((x) => x === new URLSearchParams(window.location.search).get('from')) || '',
       });
       saveCustomer({ ...c, remarks: '' });
       setCb('done');

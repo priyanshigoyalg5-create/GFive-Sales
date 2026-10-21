@@ -8,6 +8,7 @@ import type { Role } from './types';
 export const PERMISSIONS = [
   { key: 'addSamples', group: 'Samples', label: 'Add new samples', hint: 'Upload designs and create share links' },
   { key: 'addForOthers', group: 'Samples', label: 'Add samples for another Admin', hint: 'When someone is busy or unwell — the sample is put in their name', needs: 'addSamples' },
+  { key: 'socialPost', group: 'Samples', label: 'Post designs to Instagram & Facebook', hint: 'Publishes on the GFive page and @gfiveindia' },
   { key: 'editAllSamples', group: 'Samples', label: 'Edit / trash any sample', hint: 'Not only the samples they added' },
   { key: 'deleteSamples', group: 'Samples', label: 'Delete samples forever', hint: 'Permanently remove from Trash' },
   { key: 'aiMedia', group: 'Samples', label: 'AI model photo & video', hint: 'Uses paid Google AI credit' },

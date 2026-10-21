@@ -8,6 +8,7 @@ import { digitsOnly } from '@/lib/format';
 import type { CompanySettings } from '@/lib/types';
 import PageHeader from '@/components/admin/PageHeader';
 import WhatsAppBotCard from '@/components/admin/WhatsAppBotCard';
+import SocialCard from '@/components/admin/SocialCard';
 
 const FIELDS: { key: keyof CompanySettings; label: string; hint?: string }[] = [
   { key: 'companyName', label: 'Company name (on invoice)' },
@@ -66,6 +67,9 @@ function SettingsForm({ current, msg, setMsg }: { current: CompanySettings; msg:
       </form>
       <div className="mt-6">
         <WhatsAppBotCard />
+      </div>
+      <div className="mt-6">
+        <SocialCard />
       </div>
     </>
   );
