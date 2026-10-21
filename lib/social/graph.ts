@@ -93,12 +93,25 @@ export function publicReply(platform: Platform, commentId: string, text: string)
   return platform === 'instagram' ? graph(`${commentId}/replies`, { message: text }) : graph(`${commentId}/comments`, { message: text });
 }
 
-/** Name of the person (best effort). */
-export async function profileName(platform: Platform, userId: string): Promise<{ name: string; handle: string }> {
+export interface Profile {
+  name: string;
+  handle: string;
+  followers?: number | null; // Instagram only
+  followsUs?: boolean | null; // Instagram only
+}
+
+/** Name of the person (best effort). Instagram also gives follower count and whether they follow us. */
+export async function profileName(platform: Platform, userId: string): Promise<Profile> {
   try {
     if (platform === 'instagram') {
-      const d = await graph<{ name?: string; username?: string }>(userId, { fields: 'name,username' }, 'GET');
-      return { name: d.name || d.username || '', handle: d.username ? `@${d.username}` : '' };
+      type IgP = { name?: string; username?: string; follower_count?: number; is_user_follow_business?: boolean };
+      const d = await graph<IgP>(userId, { fields: 'name,username,follower_count,is_user_follow_business' }, 'GET').catch(() => graph<IgP>(userId, { fields: 'name,username' }, 'GET'));
+      return {
+        name: d.name || d.username || '',
+        handle: d.username ? `@${d.username}` : '',
+        followers: typeof d.follower_count === 'number' ? d.follower_count : null,
+        followsUs: typeof d.is_user_follow_business === 'boolean' ? d.is_user_follow_business : null,
+      };
     }
     const d = await graph<{ first_name?: string; last_name?: string; name?: string }>(userId, { fields: 'first_name,last_name,name' }, 'GET');
     return { name: d.name || [d.first_name, d.last_name].filter(Boolean).join(' '), handle: '' };

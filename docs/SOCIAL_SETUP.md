@@ -42,3 +42,17 @@ GFive Sales → Settings → **Instagram & Facebook**: all ticks green → check
 Test: comment "price" on a post made from Samples → you should get a DM; send "hi" to the page / @gfiveindia.
 
 Rules from Meta: DMs can only be answered within 24 h of the customer's message; one private reply per comment, within 7 days.
+
+## Hot-lead signals (no setup needed)
+* **Website:** the customer's own browser counts how many GFive designs they opened and on how
+  many days; the count comes with their enquiry / call-back ("👀 6 designs · 3 visits").
+* **Instagram DM:** Meta gives follower count and whether they follow @gfiveindia
+  ("❤ Follows us", "4.2k followers").
+* **Ads:** a chat opened from a Click-to-Instagram / Messenger ad is tagged "📣 From our ad".
+  For this, also subscribe the webhook to **messaging_referrals** (Meta app → Webhooks).
+  Best audience for wholesale: Ads Manager → Detailed targeting → *Engaged shoppers*,
+  *Business page admins*, interests *Boutique*, *Salwar kameez*, *Women's ethnic wear*,
+  *Retail*; objective **Messages** (Instagram + Messenger) or **Click to WhatsApp**.
+* Personal search / purchase history on Google, Amazon, Meesho etc. is private — no app can
+  get it legally, and buying such "data lists" breaks the DPDP Act 2023. Meta ad targeting is
+  the legal way to reach online shoppers.

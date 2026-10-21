@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Loader2, MessageCircle, Send } from 'lucide-react';
 import { checkGstin } from '@/lib/gst';
+import { noteVisit } from '@/lib/interest';
 import { createLead, getPublicStaff, latestSamples, usePublicSettings } from '@/lib/public-db';
 import { cldThumb, digitsOnly, inr } from '@/lib/format';
 import { samplePhotos } from '@/lib/sample-photos';
@@ -39,6 +40,7 @@ function Enquiry() {
     setF((x) => ({ ...x, name: c.firmName || x.name, mobile: c.mobile || x.mobile, city: c.city || x.city }));
   }, []);
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  useEffect(() => noteVisit(), []);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {

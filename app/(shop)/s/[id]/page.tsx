@@ -8,6 +8,7 @@ import { cldThumb, digitsOnly, inr } from '@/lib/format';
 import { sampleColors, samplePhotos, allSamplePhotos, sampleLink, isAiPhoto } from '@/lib/samples';
 import { buildOrderWhatsAppText, type CustomerDetails } from '@/lib/orders';
 import { loadCustomer, saveCustomer } from '@/lib/customer';
+import { noteVisit } from '@/lib/interest';
 import { createLead, createOrder, getPublicStaff, getSample, nextOrderNumber, usePublicSettings } from '@/lib/public-db';
 import Lightbox from '@/components/Lightbox';
 import QtyStepper from '@/components/QtyStepper';
@@ -50,6 +51,7 @@ export default function SampleOrderPage() {
         if (!alive) return;
         if (found && !found.isTrashed) {
           const s = found;
+          noteVisit(s.id);
           const viaCreator = viaLink ? null : await getPublicStaff(s.createdByUid);
           const p = viaLink || viaCreator;
           if (!alive) return;

@@ -25,3 +25,13 @@ test('per-person limit skips a full Sales Person', () => {
   assert.equal(who?.uid, 'u2');
   assert.equal(assignWithFilter({ ...base }, ctx0, team, { ...DEFAULT_FILTER, maxOpen: 1 }, new Map([['u3', 1], ['u2', 1]])), null);
 });
+
+test('interest signals raise the score', () => {
+  const sc = (l: Partial<Lead>) => scoreLead({ ...base, phone: '919830012345', ...l }).score;
+  const plain = sc({});
+  assert.equal(sc({ interest: { designs: 1, visits: 1, firstSeen: 0 } }), plain);
+  assert.equal(sc({ interest: { designs: 4, visits: 1, firstSeen: 0 } }), plain + 10);
+  assert.equal(sc({ interest: { designs: 9, visits: 5, firstSeen: 0 } }), plain + 15);
+  assert.equal(sc({ followsUs: true, igFollowers: 2500, fromAd: '123' }), plain + 20);
+  assert.ok(scoreLead({ ...base, message: 'rate?', igFollowers: 2500 }).reasons.includes('Instagram 2.5k followers'));
+});

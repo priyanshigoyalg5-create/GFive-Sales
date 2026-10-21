@@ -195,3 +195,11 @@ test('online check: cancelled GST is held even with mobile', async () => {
   assert.equal(l.assignedUid, '');
   assert.equal(l.holdReason, 'GST Cancelled');
 });
+
+test('Instagram profile + ad referral are saved on the lead', async () => {
+  const w = world();
+  w.deps.api.profileName = async () => ({ name: 'Meena', handle: '@meenaboutique', followers: 4200, followsUs: true });
+  await handleMetaWebhook({ object: 'instagram', entry: [{ messaging: [{ sender: { id: 'IGSID9' }, message: { mid: 'ad1', text: 'price?', referral: { source: 'ADS', ad_id: '6001' } } }] }] }, w.deps);
+  const l = [...w.leads.values()][0];
+  assert.deepEqual([l.igFollowers, l.followsUs, l.fromAd], [4200, true, '6001']);
+});

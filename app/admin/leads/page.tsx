@@ -13,7 +13,7 @@ import { cldThumb, formatDate, tsToDate } from '@/lib/format';
 import { samplePhotos, sampleLink } from '@/lib/samples';
 import { categoryName } from '@/lib/categories';
 import {
-  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, assignWithFilter, buildLeadContext, isOpen, leadSource, normPhone, qualifies, scoreLead,
+  LEAD_SOURCES, LEAD_STATUSES, TEMP_STYLE, assignWithFilter, compact, buildLeadContext, isOpen, leadSource, normPhone, qualifies, scoreLead,
   type LeadFilter,
   type Lead, type LeadSource, type LeadStatus, type LeadTemp,
 } from '@/lib/leads';
@@ -339,6 +339,10 @@ function LeadCard({
             {gst !== 'none' && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${GST_LEVEL_STYLE[gst].pill}`}>🧾 {GST_LEVEL_STYLE[gst].label}</span>}
             {l.buyerType === 'business' && gst === 'none' && <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-xs text-leaf-800">Shop / wholesale</span>}
             {l.buyerType === 'personal' && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-muted">Personal use</span>}
+            {(l.interest?.designs || 0) > 0 && <span className="rounded-full bg-gold-50 px-2 py-0.5 text-xs text-gold-600" title="Designs seen on our website before the enquiry">👀 {l.interest!.designs} design{l.interest!.designs === 1 ? '' : 's'}{(l.interest!.visits || 0) > 1 ? ` · ${l.interest!.visits} visits` : ''}</span>}
+            {l.followsUs && <span className="rounded-full bg-[#fdebf3] px-2 py-0.5 text-xs text-[#a3205c]">❤ Follows us</span>}
+            {(l.igFollowers || 0) > 0 && <span className="rounded-full bg-sand px-2 py-0.5 text-xs text-muted">{compact(l.igFollowers!)} followers</span>}
+            {l.fromAd && <span className="rounded-full bg-[#e8f0fe] px-2 py-0.5 text-xs text-[#1d4fb8]" title={l.fromAd !== 'ad' ? `Ad ${l.fromAd}` : ''}>📣 From our ad</span>}
             {l.kind === 'care' && <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs font-medium text-white">Customer care</span>}
           </div>
           <p className="mt-0.5 text-sm text-muted">

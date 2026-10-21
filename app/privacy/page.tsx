@@ -12,16 +12,16 @@ export default function PrivacyPage() {
     <main className="mx-auto max-w-2xl px-5 py-12 text-[16px] leading-relaxed text-ink">
       <p className="eyebrow">GFive Kolkata</p>
       <h1 className="mt-1 font-display text-4xl font-semibold">Privacy policy</h1>
-      <p className="mt-2 text-sm text-muted">Last updated: 20 October 2026</p>
+      <p className="mt-2 text-sm text-muted">Last updated: 22 October 2026</p>
 
       <Section n={1} title="Who we are">
         GFive Designers Couture Pvt. Ltd. (“GFive”), 113, Park Street, Poddar Point, 3rd Floor, Kolkata 700016, India. Email: info@gfive.co.in · WhatsApp: +91 70444 40614.
       </Section>
       <Section n={2} title="What we collect">
-        When you order from a design link, ask for a call back, or message us on WhatsApp, Instagram or Facebook, we receive: your name / firm name, mobile number, city, GST number and agent name (if you give them), the designs, colours and pieces you choose, and the messages, photos or videos you send us. Our Sales Persons may add notes about your enquiry.
+        When you order from a design link, ask for a call back, or message us on WhatsApp, Instagram or Facebook, we receive: your name / firm name, mobile number, city, GST number and agent name (if you give them), the designs, colours and pieces you choose, and the messages, photos or videos you send us. Our Sales Persons may add notes about your enquiry. If you message us on Instagram, Meta tells us your public profile name, username, follower count, whether you follow our account, and whether you came from one of our ads. If you give a GST number we may check it against the public GST records (firm name and status). On our website, your own browser remembers how many of our designs you looked at and on how many days (no cookies, nothing sent to other companies); this count is sent to us only when you send an enquiry or call-back request.
       </Section>
       <Section n={3} title="Why we use it">
-        Only to answer you, take and deliver your orders, send invoices and order updates, and help you with complaints. We do not sell your details and we do not use them for anyone else’s advertising.
+        Only to answer you, take and deliver your orders, send invoices and order updates, and help you with complaints. We do not sell your details, we do not buy data about you from anyone, and we do not use your details for anyone else’s advertising.
       </Section>
       <Section n={4} title="Who can see it">
         Your details are seen by GFive’s owners and the Sales Person who looks after you. They are stored with our service providers: Google Firebase (database and login), Vercel (website), Cloudinary (design photos) and Meta (WhatsApp, Instagram, Facebook messages). AI model photos and videos are made only from our own design photos (Google AI) — never from your messages or photos.

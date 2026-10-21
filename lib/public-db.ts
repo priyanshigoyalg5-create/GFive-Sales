@@ -12,6 +12,7 @@ import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, orderBy,
 import { app } from './firebase-app';
 import type { CompanySettings, PublicStaff, Sample } from './types';
 import { DEFAULT_SETTINGS } from './settings-defaults';
+import { readInterest } from './interest';
 
 const db = getFirestore(app);
 
@@ -63,6 +64,7 @@ export async function createLead(data: {
   buyerType?: 'business' | 'personal' | '';
   gstin?: string;
 }): Promise<void> {
+  const interest = readInterest();
   await addDoc(collection(db, 'leads'), {
     name: data.name.slice(0, 80),
     phone: data.phone.slice(0, 15),
@@ -76,6 +78,7 @@ export async function createLead(data: {
     via: data.via || '', // came from the Instagram / Facebook bio link
     buyerType: data.buyerType || '',
     gstin: (data.gstin || '').slice(0, 15),
+    ...(interest ? { interest: { designs: Math.min(999, interest.designs), visits: Math.min(999, interest.visits), firstSeen: interest.firstSeen } } : {}),
     status: 'new',
     refUid: data.refUid,
     assignedUid: data.sellerUid,
