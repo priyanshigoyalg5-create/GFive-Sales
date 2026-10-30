@@ -1,0 +1,54 @@
+<script>
+/* ===== DEMO BACKEND: in-memory fake Firebase with sample data (nothing is saved) ===== */
+(function(){
+const D0=n=>{const d=new Date(Date.now()-n*864e5);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const cats=["Dyeing","Hand work","Katha","Tailor / Finishing","Computer work","Machine Embroidery","Applique work","Print","Khaka"];
+const DB={alters:{},categories:{},vendors:{},karigars:{},fabrics:{},designs:{},orders:{},inward:{},issues:{},receipts:{},deliveries:{},payments:{},opening:{},settings:{main:{tds:1,std:1.5,od:15}},users:{}};
+cats.forEach((c,i)=>DB.categories[c.toUpperCase().replace(/[^A-Z0-9]+/g,"_")]={name:c,order:i+1});
+[["AASTHA CREATIONS","24AAAAA0000A1Z5","Ring Road, Surat, Gujarat - 395002","9000011111"],["COLOUR TEX","24AAHCC1234M1Z2","Sahara Darwaja, Surat, Gujarat","9825012345"],["ALPINE FASHION FABRICS (SURAT)","24AAAAA0000A1Z5","Apparel Park, Vanz, Surat","9000011112"],["BALAJI FAB","",""]].forEach(v=>DB.vendors[v[0].replace(/[^A-Z0-9]+/g,"_")]={name:v[0],gstin:v[1]||undefined,address:v[2]||undefined,phone:v[3]||undefined,auto:!v[1]});
+[["MAHMOOD ALAM","Dyeing","9830011111"],["RUSTAM","Hand work","9830022222"],["SAIFUDDIN(KATHA)","Katha","9830033333"],["FASHION EMBROIDERY (JAMAL)","Machine Embroidery","9830044444"],["MADHU PRINTS","Print","9830055555"],["ASADUL","Tailor / Finishing","9830066666"],["ALIM MISTRI (KATHA)","Katha","9830077777"]].forEach(k=>DB.karigars[k[0].replace(/[^A-Z0-9]+/g,"_")]={name:k[0],proc:k[1],phone:k[2]});
+[["F158","MUL CHANDERI","Mtr",128],["F105","PURE ORGANZA","Mtr",95],["F005","ART CREP","Mtr",60],["F001","CHINNON CHIFFON","Mtr",79],["F978","1430SD SUIT PC","Pcs",895]].forEach(f=>DB.fabrics[f[0]]={fabNo:f[0],name:f[1],unit:f[2],rate:f[3]});
+["SD11068","SD11069","SD11375","RZ0038","GF26S271","TY0123"].forEach(d=>DB.designs[d]={design:d});
+DB.orders.A031={jobCard:"A031",design:"SD11068",brand:"SUDH",orderDate:D0(35),qty:20,deliveryDate:D0(3),topFab:"F158",dupFab:"F158",botFab:"COTTON"};
+DB.orders.A033={jobCard:"A033",design:"SD11069",brand:"SUDH",orderDate:D0(30),qty:16,deliveryDate:D0(-5),topFab:"F105",dupFab:"F105",botFab:"CREPE"};
+DB.orders.A066={jobCard:"A066",design:"RZ0038",brand:"ROZANA",orderDate:D0(12),qty:60,deliveryDate:D0(-12),topFab:"F158",dupFab:"F158",botFab:"COTTON"};
+DB.inward.I1={date:D0(40),bill:"713",po:"PO-88",vendor:"AASTHA CREATIONS",gstin:"24AAAAA0000A1Z5",item:"Mul chanderi",qty:500,unit:"Mtr",rate:128,courier:"By Hand",fabNo:"F158",at:D0(40)};
+DB.inward.I2={date:D0(25),bill:"906",vendor:"COLOUR TEX",item:"Pure organza",qty:300,unit:"Mtr",rate:95,courier:"SKY",fabNo:"F105",at:D0(25)};
+DB.fabrics.F005={fabNo:"F005",name:"ART CREP",unit:"Mtr",rate:120};
+DB.inward.I4={date:D0(60),bill:"311",vendor:"AASTHA CREATIONS",item:"Art crep",qty:200,unit:"Mtr",rate:120,fabNo:"F005",at:D0(60)};
+DB.inward.I5={date:D0(45),bill:"418",vendor:"COLOUR TEX",item:"Art crep",qty:300,unit:"Mtr",rate:125,fabNo:"F005",at:D0(45)};
+DB.inward.I6={date:D0(15),bill:"522",vendor:"BALAJI FAB",item:"Art crep",qty:100,unit:"Mtr",rate:130,fabNo:"F005",at:D0(15)};
+const hs=(id,ch,d,k,qty,rate)=>DB.issues[id]={challan:ch,date:D0(d),karigar:k,proc:"Hand work",design:"GF26S271",topFab:"F005",dupFab:"F005",topMtr:3.15,dupMtr:2.6,total:5.75,qty,rate,at:D0(d)};
+hs("S1-1","S1",50,"FASHION EMBROIDERY (JAMAL)",1,1200);hs("S2-1","S2",50,"MADHU PRINTS",1,1100);hs("S3-1","S3",49,"SAIFUDDIN(KATHA)",1,1000);hs("S4-1","S4",49,"ALIM MISTRI (KATHA)",1,1050);
+hs("L50-1","L50",35,"RUSTAM",50,800);hs("L100-1","L100",14,"ALIM MISTRI (KATHA)",100,500);
+DB.inward.I3={date:D0(10),bill:"4696",vendor:"ALPINE FASHION FABRICS (SURAT)",item:"1430SD",qty:40,unit:"Pcs",rate:895,courier:"Khanna",fabNo:"F978",at:D0(10)};
+const is=(id,ch,d,k,p,des,jc,tf,qty,rate,due)=>DB.issues[id]={challan:ch,date:D0(d),karigar:k,proc:p,design:des,jobCard:jc,topFab:tf,dupFab:tf,topMtr:3.15,dupMtr:2.6,total:5.75,qty,rate,due:due!=null?D0(due):undefined,at:D0(d)};
+is("99-1","99",22,"MAHMOOD ALAM","Dyeing","SD11068","A031","F158",20,120,15);
+is("209-1","209",18,"RUSTAM","Hand work","SD11068","A031","F158",20,375,5);
+is("90-1","90",20,"MAHMOOD ALAM","Dyeing","SD11069","A033","F105",16,120,12);
+is("2245-1","2245",8,"SAIFUDDIN(KATHA)","Katha","RZ0038","A066","F158",60,425,null);
+DB.receipts.R1={line:"99-1",date:D0(20),qty:20,ready:false,at:D0(20)};
+DB.receipts.R2={line:"209-1",date:D0(5),qty:12,ready:true,at:D0(5)};
+DB.receipts.R3={line:"90-1",date:D0(17),qty:16,ready:false,at:D0(17)};
+DB.orders.SMP_01={jobCard:"SMP-01",design:"SD11375",kind:"sample",party:"BANGALORE AGENT",brand:"GFIVE",orderDate:D0(20),qty:4,deliveryDate:D0(-3),colours:"P53, P54, P55, P56",topFab:"Mul chanderi",botFab:"Cotton"};
+is("SM1-1","SM1",19,"FASHION EMBROIDERY (JAMAL)","Hand work","SD11375","SMP-01","F158",1,1200,null);
+is("SM2-1","SM2",19,"MADHU PRINTS","Print","SD11375","SMP-01","F158",1,1100,null);
+is("SM3-1","SM3",18,"SAIFUDDIN(KATHA)","Katha","SD11375","SMP-01","F158",1,1000,null);
+DB.receipts.RS1={line:"SM1-1",date:D0(10),qty:1,ready:true,at:D0(10)};
+DB.alttypes={};[["Dyeing (re-dye)","Dyeing"],["Hand work repair","Hand work"],["Piping repair","Tailor / Finishing"],["Stitching repair","Tailor / Finishing"],["Other",""]].forEach((a,i)=>DB.alttypes[a[0].toUpperCase().replace(/[^A-Z0-9]+/g,"_")]={name:a[0],proc:a[1]||undefined,order:i+1});
+DB.alters.A1={date:D0(6),challan:"ALT-1",design:"SD11068",colour:"P53",altType:"Piping repair",karigar:"ASADUL",qty:6,rate:40,due:D0(-2),reason:"piping loose at neck",fromStock:true,returns:[{d:D0(2),q:2,r:""}],at:D0(6)};
+DB.deliveries.D1={date:D0(2),challan:"DC-14",party:"BANGALORE AGENT",design:"SD11068",qty:5,at:D0(2)};
+DB.payments.P1={karigar:"RUSTAM",date:D0(3),amount:2000,mode:"Cash",remarks:"advance",at:D0(3)};
+DB.opening.O1={type:"des",key:"SD11375",qty:10,unit:"Pcs",date:D0(40)};
+DB.opening.O2={type:"fab",key:"F105",qty:150,unit:"Mtr",date:D0(40)};
+[["Demo Owner","9000000001","super"],["Demo Admin","9000000002","admin"],["Demo Sub","9000000003","sub"]].forEach(u=>DB.users["+91"+u[1]]={name:u[0],mobile:u[1],role:u[2],perms:u[2]==="super"?{add:1,del:1,masters:1,export:1,rates:1,ledger:1}:u[2]==="sub"?{add:1,masters:1,export:1,rates:1}:{add:1}});
+const L={};
+const snap=n=>({docs:Object.keys(DB[n]).map(id=>({id,data:()=>DB[n][id]})),metadata:{hasPendingWrites:false}});
+const fire=n=>(L[n]||[]).forEach(cb=>cb(snap(n)));
+const ref=(n,id)=>({_n:n,_i:id,set(v,o){DB[n][id]=o&&o.merge?Object.assign({},DB[n][id]||{},v):v;fire(n);return Promise.resolve()},get(){return Promise.resolve({exists:!!DB[n][id],id,data:()=>DB[n][id]})},delete(){delete DB[n][id];fire(n);return Promise.resolve()}});
+const fsx={enablePersistence(){return Promise.resolve()},collection(n){n=String(n).replace(/^jw_/,"");DB[n]=DB[n]||{};return{onSnapshot(a,b){const cb=typeof a==="function"?a:b;(L[n]=L[n]||[]).push(cb);cb(snap(n));return()=>{}},doc(id){return ref(n,id)}}},
+batch(){const ops=[];return{set(r,v,o){ops.push([r,v,o])},commit(){const t={};ops.forEach(x=>{const r=x[0];DB[r._n][r._i]=x[2]&&x[2].merge?Object.assign({},DB[r._n][r._i]||{},x[1]):x[1];t[r._n]=1});Object.keys(t).forEach(fire);return Promise.resolve()}}}};
+const au={signOut(){return Promise.resolve()},currentUser:null};
+window.firebase={initializeApp(){},auth:Object.assign(()=>au,{RecaptchaVerifier:function(){this.clear=()=>{}}}),firestore:()=>fsx};
+})();
+</script>

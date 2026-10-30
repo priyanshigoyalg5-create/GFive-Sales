@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2a3a8c">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GFive">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="icon-192.png">
+<title>GFive Job-Work</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#faf5e9;--card:#fff;--ink:#1c2340;--mut:#69708a;--line:#dcd8ce;--ac:#2a3a8c;--on:#fff;--gold:#c9961a;--ok:#1f7a4d;--bad:#b3261e;--inp:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#12162b;--card:#1b2140;--ink:#eceefb;--mut:#9aa2c4;--line:#2e3560;--ac:#8fa2ff;--on:#12162b;--gold:#e3b341;--ok:#4cc38a;--bad:#ff8a80;--inp:#141a35;color-scheme:dark}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:600 17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;max-width:640px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(60px + env(safe-area-inset-bottom,0px))}
+h1{font:700 24px Georgia,serif;margin:0}h2{font:700 20px Georgia,serif;margin:0 0 8px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+nav{display:flex;gap:6px;overflow-x:auto;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5}
+nav button{flex:1 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 12px;border-radius:8px;font:700 15px inherit;white-space:nowrap}
+nav button.on{background:var(--ac);color:var(--on);border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0}
+label{display:block;font-size:15px;font-weight:700;color:var(--mut);margin:10px 0 3px}
+input[type=date]{-webkit-appearance:none;appearance:none;height:43px;text-align:left}
+input,select{width:100%;min-width:0;max-width:100%;padding:10px;border:1px solid var(--line);border-radius:7px;background:var(--inp);color:var(--ink);font:600 17px inherit}
+input[readonly]{cursor:pointer}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.g .w{grid-column:1/3}
+.btn{width:100%;margin-top:12px;padding:12px;border:0;border-radius:8px;background:var(--ac);color:var(--on);font:700 17px inherit}
+.btn.o{background:none;border:1px solid var(--ac);color:var(--ac)}.btn.r{background:var(--bad);color:#fff}.btn.s{width:auto;padding:6px 12px;margin:0;font-size:13px}
+.chip{display:inline-block;font-size:14px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.bad{color:var(--bad);font-weight:700}.ok{color:var(--ok);font-weight:700}.sm{font-size:15px;color:var(--mut)}
+.it{border-left:4px solid var(--gold);padding:8px 10px;margin:0 0 10px;border-radius:8px}.it.d{border-left-color:var(--ok)}
+#pv{display:none}
+@media print{@page{margin:12mm}body>*:not(#pv){display:none!important}body{background:#fff!important;padding:0!important}#pv{display:block;color:#000;background:#fff;font:14px/1.4 Arial,sans-serif}#pv table{width:100%;border-collapse:collapse;margin:6px 0}#pv th,#pv td{border:1px solid #444;padding:5px;text-align:left;font-size:13px;color:#000}.phd{text-align:center;font-size:13px}.sig{display:flex;justify-content:space-between;margin-top:60px}}
+.c0{background:#e6f0fd}.c1{background:#fde8f1}.c2{background:#efe8fc}.c3{background:#e3f5e6}
+@media (prefers-color-scheme:dark){.c0{background:#1f2a55}.c1{background:#3a2140}.c2{background:#2d2354}.c3{background:#173a2b}}
+.top{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stats div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}
+.stats b{display:block;font:700 20px Georgia,serif}.stats span{font-size:14px;color:var(--mut)}
+img.ph{width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--line);margin-top:6px}
+.ov{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 40px;max-width:640px;margin:0 auto}
+.row{padding:11px 4px;border-bottom:1px solid var(--line)}
+.note{background:rgba(201,150,26,.15);border-radius:7px;padding:8px 10px;font-size:13px;margin-top:10px}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30;max-width:90%}.toast.show{opacity:1}
+.seg{display:flex;gap:6px;overflow-x:auto}.seg button{flex:1;padding:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;font:600 13px inherit}.seg button.on{background:var(--ac);color:var(--on)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="t"></div>
+<script>
+/* ===== SETUP: paste your Firebase web config here (see README) ===== */
+const CFG=/*CFG*/{}/*CFG*/;   // filled by scripts/build-production.mjs from the GFive Sales Firebase env
+const OWN_GSTIN="";   // your own company GSTIN, so the bill reader skips it
+/* ================================================================== */
+const $=i=>document.getElementById(i);
+const esc=x=>String(x==null?"":x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const toast=m=>{const t=$("t");t.textContent=m;t.className="toast show";setTimeout(()=>t.className="toast",2800)};
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const dayKey=()=>{const d=new Date(Date.now()-4*36e5);return d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate()};
+const clean=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null&&o[k]!=="")r[k]=o[k];return r};
+const num=x=>+x||0;
+async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const PW=p=>"GF"+p+"#7",EM=m=>m+"@gfive.app";
+firebase.initializeApp(CFG);
+const auth=firebase.auth(),fs=firebase.firestore();
+const P="jw_",jc=c=>fs.collection(P+c);   // Job Work data lives next to GFive Sales data as jw_*
+/* server helper (AI photo reading, starter masters) */
+async function jwApi(path,body){const u=auth.currentUser;if(!u)throw new Error("Please login again");const r=await fetch("/api/jw/"+path,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+await u.getIdToken()},body:JSON.stringify(body||{})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("Server "+r.status));return j}
+fs.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+const COLS=["vendors","karigars","fabrics","designs","inward","issues","receipts","deliveries","categories","payments","opening","settings","orders","costs","alters","alttypes","users"];
+const D={};COLS.forEach(c=>D[c]=[]);
+let ME=null,TAB="bal",MK="vendors",Q="",QK="",PH=null,KEEP={},subbed=false,pendCols={};
+const DEF_CATS=["Dyeing","Hand work","Katha","Tailor / Finishing","Computer work","Machine Embroidery","Applique work","Print","Khaka"];
+const PL=()=>{const a=D.categories.filter(x=>!x.inactive).sort((x,y)=>(+x.order||999)-(+y.order||999)||x.name.localeCompare(y.name));return a.length?a.map(x=>x.name):DEF_CATS};
+const MF={vendors:[["name","Vendor name",0,1],["gstin","GST no"],["phone","Phone"],["address","Address",0,1]],karigars:[["name","Karigar / jobber name",0,1],["phone","Phone"],["proc","Category","proc"]],fabrics:[["fabNo","Fabric no"],["rate","Rate Rs/mtr","number"],["name","Fabric name",0,1],["width","Width / remarks",0,1]],designs:[["design","Design no",0,1],["desc","Description",0,1]],categories:[["name","Category name (Dyeing, Print...)",0,1]],alttypes:[["name","Alteration work name",0,1],["proc","Karigar category","proc"]]};
+const MKEY={vendors:"name",karigars:"name",fabrics:"fabNo",designs:"design",categories:"name",alttypes:"name"};
+const MT={vendors:"Vendors",karigars:"Karigars",fabrics:"Fabrics",designs:"Designs",categories:"Categories",alttypes:"Alteration types"};
+const DEF_ALT=[{name:"Dyeing (re-dye)",proc:"Dyeing"},{name:"Hand work repair",proc:"Hand work"},{name:"Piping repair",proc:"Tailor / Finishing"},{name:"Stitching repair",proc:"Tailor / Finishing"},{name:"Other",proc:""}];
+const ALL=()=>{const a=D.alttypes.filter(x=>!x.inactive).sort((x,y)=>(+x.order||999)-(+y.order||999)||x.name.localeCompare(y.name));return a.length?a:DEF_ALT};
+const AL=()=>ALL().map(x=>x.name),altCat=n=>(ALL().find(x=>x.name===n)||{}).proc||"";
+const altRet=x=>(x.returns||[]).reduce((t,y)=>t+num(y.q),0),altPend=x=>Math.max(0,num(x.qty)-altRet(x));
+const FF={
+inward:[["date","Received date","date"],["bill","Bill no"],["vendor","Vendor","pick:vendors",1],["gstin","GST no"],["po","PO no"],["item","Item / vendor code (1430SD, Taffeta...)",0,1],["qty","Quantity","number"],["unit","Unit","unit"],["rate","Rate Rs","number"],["courier","Courier / how it came"],["fabNo","Our fabric no (F...)","pick:fabrics",1],["remarks","Remarks",0,1]],
+issues:[["challan","Challan no"],["date","Issue date","date"],["karigar","Karigar","pick:karigars",1],["proc","Category","proc"],["design","Design no","pick:designs"],["jobCard","Job card / sample no","pick:orders"],["sample","SAMPLE issue (not production)","check",1],["rows","Colours and pieces","rows",1],["rate","Job rate Rs/pc","number"],["total","Total mtr/pc on challan (top + dup)","number",1],["topFab","Top fabric no","pick:fabrics"],["topMtr","Top mtr/pc","number"],["dupFab","Dup fabric no (blank = same)","pick:fabrics"],["dupMtr","Dup mtr/pc","number"],["due","Return by (due date)","date"],["desc","Description",0,1],["remarks","Remarks",0,1]],
+receipts:[["line","Challan line","pick:lines",1],["date","Receive date","date"],["qty","Qty received","number"],["rate","Job rate Rs/pc","number"],["remarks","Remarks / ERP RCV no",0,1],["ready","Ready for delivery (final stage of this design)","check",1]],
+orders:[["jobCard","Job card no / S.No (e.g. P256)"],["design","Design no","pick:designs"],["brand","Brand (auto from design no)","opt:brand"],["party","For party / buyer (optional)","opt:party"],["orderType","Order type","opt:orderType"],["orderDate","Order date","date"],["qty","Order qty (pcs)","number"],["deliveryDate","Delivery date (planned)","date"],["topFab","Top fabric","pick:fabname",1],["dupFab","Dupatta fabric","pick:fabname",1],["botFab","Bottom fabric","pick:fabname",1],["accessories","Accessories (lace, funda...)",0,1],["colours","Colours (choose 4-8)","multi:colour",1],["remarks","Remarks",0,1]],
+alters:[["date","Issue date","date"],["challan","Alteration challan no"],["design","Design no","pick:designs"],["jobCard","Job card / sample no (optional)","pick:orders"],["colour","Colour","opt:colour"],["altType","Alteration work","alt"],["karigar","Karigar","pick:karigars",1],["qty","Qty (pcs)","number"],["rate","Alteration rate Rs/pc","number"],["due","Return by","date"],["reason","What to alter / defect",0,1],["fromStock","Taken from ready stock","check",1],["remarks","Remarks",0,1]],
+deliveries:[["date","Delivery date","date"],["challan","Delivery challan / invoice no"],["party","Delivered to (party)","opt:party",1],["design","Design no","pick:designs"],["qty","Qty delivered (pcs)","number"],["remarks","Remarks",0,1]]};
+const TITLE={inward:"Fabric inward",issues:"Issue to karigar",receipts:"Receive from karigar",alters:"Alteration (send to karigar)",deliveries:"Delivery / dispatch",orders:"New order / job card"};
+const can=a=>ME&&(ME.role==="super"||(ME.perms&&ME.perms[a]));
+const rcv=id=>D.receipts.filter(r=>r.line===id).reduce((a,r)=>a+num(r.qty),0);
+const frate=n=>{const f=D.fabrics.find(x=>x.fabNo===n);return f?num(f.rate):0};
+const iu=x=>x.unit||(x.mtr?"Mtr":"Pcs"),iq=x=>x.qty!=null?num(x.qty):num(x.mtr||x.pcs);
+const fcost=x=>num(x.topMtr)*frate(x.topFab)+num(x.dupMtr)*frate(x.dupFab||x.topFab);
+
+/* ---------- login / session (OTP) ---------- */
+const BOOT=/*BOOT*/[]/*BOOT*/;   // super admin mobiles, filled at build from NEXT_PUBLIC_JW_BOOT_PHONES
+const PERMS=[["add","Make entries (inward, issue, receive)"],["del","Delete entries"],["masters","Add / edit / delete masters"],["export","Download Excel"],["rates","See rates and amounts"],["ledger","Karigar ledger and payments"]];
+const PRESET={super:{add:1,del:1,masters:1,export:1,rates:1,ledger:1},admin:{add:1},sub:{add:1,masters:1,export:1,rates:1},staff:{add:1}};
+const DEF_USERS=/*USERS*/[]/*USERS*/;   // [name, 10-digit mobile, role] filled at build from JW_DEFAULT_USERS
+let CR=null,RV=null,NORMALCAP=false;
+function loginView(msg,noOtp){if(noOtp){$("app").innerHTML='<div class="card" style="margin-top:40px"><h1>GFive Job-Work</h1><p class="bad">'+esc(msg)+'</p><a class="btn" style="display:block;text-align:center;text-decoration:none" href="/start">Open GFive Dashboard</a></div>';return}
+$("app").innerHTML='<div class="card" style="margin-top:40px"><h1>GFive Designers Couture</h1><p class="sm">Login with your mobile number and OTP. The same login opens GFive Sales and Job Work.</p><label>Mobile number</label><input id="lm" type="tel" inputmode="numeric" maxlength="10"><div id="rc"></div><button class="btn" id="so">Send OTP</button><div id="ob" hidden><label>OTP (6 digits)</label><input id="lo" type="tel" inputmode="numeric" maxlength="6"><button class="btn" id="vo">Verify and login</button></div><p class="bad" id="le">'+esc(msg||"")+'</p><p class="sm" style="text-align:center"><a href="/start">GFive Dashboard</a></p></div>';$("so").onclick=sendOtp;$("vo").onclick=verifyOtp}
+async function sendOtp(){const m=$("lm").value.trim();$("le").textContent="";$("le").className="bad";if(!/^\d{10}$/.test(m)){$("le").textContent="Enter 10-digit mobile number";return}
+if(!navigator.onLine){$("le").textContent="Internet is needed for OTP login.";return}
+try{try{if(RV)RV.clear()}catch(x){}RV=null;$("rc").innerHTML="";RV=new firebase.auth.RecaptchaVerifier("rc",{size:NORMALCAP?"normal":"invisible"});$("so").disabled=true;CR=await auth.signInWithPhoneNumber("+91"+m,RV);$("ob").hidden=false;$("le").className="sm";$("le").textContent="OTP sent to "+m}catch(e){$("so").disabled=false;try{RV.clear()}catch(x){}RV=null;$("le").textContent="Could not send OTP: "+(e.code||e.message);if((e.code||"")==="auth/captcha-check-failed"){NORMALCAP=true;$("le").textContent="Captcha check failed. Press Send OTP again and tick the I am not a robot box that appears. If it keeps failing, add this site in Firebase Authorized domains and turn off ad-blocker or tracking protection."}}}
+async function verifyOtp(){const c=$("lo").value.trim(),le=$("le");if(!/^\d{6}$/.test(c)){le.className="bad";le.textContent="Enter the 6-digit OTP";return}
+le.className="sm";le.textContent="Checking OTP...";let r;
+try{r=await CR.confirm(c)}catch(e){le.className="bad";le.textContent="OTP wrong or expired ("+(e.code||e.message)+"). Send OTP again.";return}
+return afterLogin(r.user,le)}
+/* after any login: OTP here, or the shared login from the GFive dashboard (same Firebase account) */
+async function afterLogin(user,le){const say=(c,t)=>{if(le){le.className=c;le.textContent=t}else if(c==="bad")loginView(t)};const ph=user.phoneNumber,isb=BOOT.includes(ph);say("sm","OTP ok. Loading your account...");let u=null;
+try{u=await Promise.race([jc("users").doc(ph).get(),new Promise((_,j)=>setTimeout(()=>j(new Error("timeout")),8000))])}
+catch(e){if(!isb){say("bad","Login ok, but database not reachable ("+(e.code||e.message)+"). Check the internet, or ask the super admin to publish the Firestore rules.");return}}
+const ex=!!(u&&u.exists);
+if(!ex&&!isb){say("bad","This number ("+ph+") is not registered for Job Work. Ask a super admin to add it in More > Users.");return}
+const d=ex?u.data():{name:"Super admin",role:"super"};if(isb)d.role="super";
+const S={phone:ph,name:d.name||"",role:d.role,perms:d.perms||{}};saveSess(S);if(isb&&!ex)seedUsers();start(S)}
+function saveSess(S){S.day=dayKey();S.ts=Date.now();localStorage.setItem("gf_sess",JSON.stringify(S))}
+const EMAILMSG="You are signed in to GFive Sales with e-mail. To open Job Work, add your mobile number once on the GFive Dashboard.";
+function boot(){const S=JSON.parse(localStorage.getItem("gf_sess")||"null");$("app").innerHTML='<p class="sm" style="text-align:center;margin-top:60px">Loading...</p>';
+const un=auth.onAuthStateChanged(u=>{un();
+if(u&&u.phoneNumber){if(S&&S.phone===u.phoneNumber){saveSess(S);start(S);return}afterLogin(u,null);return}
+if(!u&&S&&!navigator.onLine&&Date.now()-S.ts<36*36e5){toast("Offline: continuing the earlier login");start(S);return}
+if(S)localStorage.removeItem("gf_sess");loginView(u?EMAILMSG:"",!!u)})}
+function logout(){localStorage.removeItem("gf_sess");auth.signOut().catch(()=>{}).finally(()=>{location.href="/admin/login"})}
+function seedUsers(){const b=fs.batch();DEF_USERS.forEach(u=>b.set(jc("users").doc("+91"+u[1]),{name:u[0],mobile:u[1],role:u[2],perms:PRESET[u[2]]},{merge:true}));b.commit().then(()=>toast("Default users loaded")).catch(()=>{})}
+
+/* ---------- start + data ---------- */
+function start(S){ME=S;if(BOOT.includes(ME.phone))ME.role="super";TAB=can("add")?"issues":"bal";
+if(!subbed){subbed=true;COLS.forEach(c=>{jc(c).onSnapshot({includeMetadataChanges:true},sn=>{D[c]=sn.docs.map(d=>({...d.data(),id:d.id}));pendCols[c]=sn.metadata.hasPendingWrites;
+if(c==="users"){const me=D.users.find(u=>u.id===ME.phone);if(me&&!BOOT.includes(ME.phone)){ME.role=me.role;ME.perms=me.perms||{};ME.name=me.name;const f=JSON.parse(localStorage.getItem("gf_sess")||"{}");Object.assign(f,{role:ME.role,perms:ME.perms,name:ME.name});localStorage.setItem("gf_sess",JSON.stringify(f))}}
+if(!document.querySelector(".ov"))refresh()},e=>{})})}
+shell()}
+function tabs(){const t=[["bal","Balance"],["stock","Stock"],["tna","TNA"],["sample","Sample TNA"]];if(can("rates"))t.push(["cost","Cost"]);if(can("add"))t.push(["inward","Inward"],["issues","Issue"],["receipts","Receive"],["deliveries","Delivery"],["alters","Alter"]);if(can("ledger"))t.push(["ledger","Ledger"]);t.push(["mast","Masters"],["more","More"]);return t}
+function shell(){$("app").innerHTML='<div class="bar"><div><h1>GFive Job-Work</h1><span class="chip">'+esc(ME.name)+" | "+ME.role+'</span> <span class="chip">v13</span> <span class="chip" id="net"></span></div><div style="white-space:nowrap"><a class="btn s o" style="text-decoration:none;display:inline-block" href="/start">Home</a> <button class="btn s o" data-act="zm" data-v="-">A-</button> <button class="btn s o" data-act="zm" data-v="+">A+</button></div></div><nav id="nav"></nav><div id="F"></div><div id="L"></div>';draw()}
+function net(){const n=$("net");if(!n)return;const p=Object.values(pendCols).some(x=>x);n.textContent=(navigator.onLine?"Online":"Offline")+(p?" | waiting to sync":"");n.className="chip "+(navigator.onLine&&!p?"ok":"bad")}
+addEventListener("online",net);addEventListener("offline",net);
+function draw(){$("nav").innerHTML=tabs().map(t=>'<button class="'+(t[0]===TAB?"on":"")+'" data-act="tab" data-v="'+t[0]+'">'+t[1]+"</button>").join("");$("F").innerHTML=formView();if($("f_total")&&$("f_total").value&&typeof calcMtr==="function")calcMtr("total");lists();net()}
+function refresh(){if(!$("L"))return;lists();net();if(TAB==="receipts"||TAB==="more"&&ME.role==="super")null}
+
+/* ---------- forms ---------- */
+function fld(f,v){const k=f[0],t=f[2]||"text",id="f_"+k,w=f[3]?"w":"";let i;
+if(t==="rows")return rowsHtml(v);
+if(t==="check")i='<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:15px;margin-top:6px"><input type="checkbox" id="'+id+'"'+(v===false?"":" checked")+' style="width:auto"> '+f[1]+"</label>";
+else if(String(t).startsWith("opt:")||String(t).startsWith("multi:"))i='<input id="'+id+'" readonly placeholder="Tap to choose" data-opt="'+t.split(":")[1]+'"'+(t.startsWith("multi:")?' data-multi="1"':"")+' value="'+esc(v||"")+'">';else if(t==="alt")i='<select id="'+id+'">'+AL().map(p=>"<option"+(p===v?" selected":"")+">"+esc(p)+"</option>").join("")+"</select>";else if(t==="unit")i='<select id="'+id+'">'+["Pcs","Mtr"].map(p=>"<option"+(p===v?" selected":"")+">"+p+"</option>").join("")+"</select>";else if(t==="proc")i='<select id="'+id+'">'+PL().map(p=>"<option"+(p===v?" selected":"")+">"+p+"</option>").join("")+"</select>";
+else if(String(t).startsWith("pick:"))i='<input id="'+id+'" readonly placeholder="Tap to choose or search" data-pick="'+t.slice(5)+'" data-k="'+k+'" value="'+esc(v||"")+'">';
+else i='<input id="'+id+'" type="'+(t==="number"?"number":t==="date"?"date":"text")+'" '+(t==="number"?'step="0.01" inputmode="decimal" ':"")+'value="'+esc(v||"")+'">';
+return '<div class="'+w+'">'+(t==="check"?"":"<label>"+f[1]+"</label>")+i+"</div>"}
+function formHtml(fields,vals){return '<div class="g">'+fields.map(f=>fld(f,vals[f[0]]!=null?vals[f[0]]:(f[0]==="date"||f[0]==="orderDate")?today():f[0]==="sample"?false:f[2]==="proc"?PL()[0]:f[2]==="alt"?AL()[0]:f[2]==="unit"?"Pcs":"")).join("")+"</div>"}
+function chBanner(k){if(k!=="issues"||!KEEP.challan)return "";const L=D.issues.filter(x=>String(x.challan)===String(KEEP.challan));
+return '<div class="note"><b>Challan '+esc(KEEP.challan)+"</b> has "+L.length+" item(s) saved: "+esc(L.map(x=>x.design+" x"+x.qty).join(", "))+(QUEUE.length?"<br>"+QUEUE.length+" more item(s) read from the photo are ready for the next lines.":"")+'</div><div class="g"><div><button class="btn o s" style="width:100%;margin:6px 0" data-act="prt" data-c="challan" data-id="'+esc(KEEP.challan)+'">Print whole challan</button></div><div><button class="btn o s" style="width:100%;margin:6px 0" data-act="newch">Start new challan</button></div></div>'}
+function formView(){const k=TAB;if(!FF[k])return "";
+const v=k==="issues"?KEEP:{};
+return '<div class="card"><h2>'+(k==="orders"&&NEWKIND==="sample"?"New sample":TITLE[k])+'</h2>'+chBanner(k)+'<button class="btn o" style="margin:0 0 6px" data-act="photo">Take photo of '+(k==="inward"?"bill":k==="issues"?"challan":k==="deliveries"?"delivery challan":"received goods")+'</button><input id="pf" type="file" accept="image/*" capture="environment" hidden><div class="sm" id="pst">Photo is optional. You can type everything by hand.</div>'+formHtml(FF[k],v)+(k==="issues"?'<div class="note" id="fm" hidden></div>':"")+'<button class="btn" data-act="save">Save entry</button>'+(k==="issues"?'<button class="btn o" data-act="savenext">Save and add another design to this challan</button>':"")+"</div>"}
+function collect(fields){const o={};fields.forEach(f=>{if(f[2]==="rows"){o.rows=getRows();return}const e=$("f_"+f[0]);if(!e)return;if(e.type==="checkbox"){o[f[0]]=e.checked;return}let v=e.value.trim();if(["fabNo","topFab","dupFab"].includes(f[0])&&(f[0]==="fabNo"||String(f[2]).startsWith("pick:fabrics")))v=v.replace(/\s/g,"").toUpperCase();if(f[0]==="design")v=v.replace(/[\s-]/g,"").toUpperCase();o[f[0]]=f[2]==="number"&&v!==""?+v:v});return o}
+function chk(o,skipFab){const b=skipFab?null:["fabNo","topFab","dupFab"].find(k=>o[k]&&!/^F\d+(\/F\d+)?$/.test(o[k]));if(b)return "Fabric no must start with F, like F158";if(o.design&&!/^[A-Z]{1,4}\d+[A-Z0-9]*$/.test(o.design))return "Design no like SD11453, RZ0152, MH0123, GF26S271";return ""}
+const sid=v=>String(v).toUpperCase().replace(/[^A-Z0-9]+/g,"_");
+function ensure(col,key,obj){if(!key||D[col].some(x=>x[MKEY[col]]===key))return;jc(col).doc(sid(key)).set(clean({...obj,[MKEY[col]]:key,auto:true}),{merge:true}).catch(()=>{})}
+function ok(p){if(!navigator.onLine)toast("Saved on phone. Will sync when online.");else toast("Saved");p.catch(e=>toast("Not saved: "+(e.message||"no permission")))}
+function save(next){const k=TAB,o=collect(FF[k]);let id;const bad=chk(o,k==="orders");if(bad)return toast(bad);
+if(k==="issues"){const R=(o.rows||[]).filter(r=>r.qty>0);delete o.rows;if(!o.challan||!R.length)return toast("Enter challan no and pieces for at least one colour");const jo=D.orders.find(x=>x.jobCard===o.jobCard);if(jo&&jo.kind==="sample")o.sample=true;if(!o.sample&&!(o.total>0)&&!(num(o.topMtr)>0))return toast("Enter total mtr per piece");if(o.total>0&&Math.abs(num(o.topMtr)+num(o.dupMtr)-o.total)>0.01)return toast("Top + Dup must equal total "+o.total+" m");if(!o.sample)delete o.sample;ROWS=R}
+else if(k==="receipts"){const l=D.issues.find(x=>x.id===o.line);if(!l||!(o.qty>0))return toast("Choose a challan line and qty");const p=num(l.qty)-rcv(l.id);if(o.qty>p)return toast("Only "+p+" pcs pending on this line");id="R"+Date.now().toString(36)}
+else if(k==="orders"){if(!o.jobCard||!o.design||!(o.qty>0))return toast("Enter job card, design and qty");id=sid(o.jobCard);o.kind=NEWKIND;ensure("designs",o.design,{})}
+else if(k==="alters"){if(!o.design||!(o.qty>0)||!o.karigar)return toast("Enter design, karigar and qty");id="A"+Date.now().toString(36);ensure("designs",o.design,{});ensure("karigars",o.karigar,{proc:altCat(o.altType)||undefined})}
+else if(k==="deliveries"){if(!o.design||!(o.qty>0))return toast("Choose design and enter qty");const av=readyOf(o.design);if(o.qty>av&&!confirm("Ready stock of "+o.design+" shows only "+av+". Save delivery anyway?"))return;id="D"+Date.now().toString(36)}
+else{if(!o.vendor||!(o.qty>0))return toast("Enter vendor and quantity");id="I"+Date.now().toString(36);
+ensure("vendors",o.vendor,{gstin:o.gstin,address:VADDR});ensure("fabrics",o.fabNo,{name:o.item,vendor:o.vendor,unit:o.unit,rate:o.unit==="Mtr"?o.rate:undefined})}
+if(k==="issues"){ensure("karigars",o.karigar,{proc:o.proc});ensure("designs",o.design,{});ensure("fabrics",o.topFab,{});ensure("fabrics",o.dupFab,{})}
+if(k==="deliveries")ensure("designs",o.design,{});
+o.at=new Date().toISOString();o.by=ME.name;if(PH)o.ph=PH;
+if(k==="issues"){let n=D.issues.filter(x=>String(x.challan)===String(o.challan)).length;const used=new Set(D.issues.map(x=>x.id)),b=fs.batch();ROWS.forEach(r=>{let i2;do{i2=o.challan+"-"+(++n)}while(used.has(i2));used.add(i2);b.set(jc(k).doc(i2),clean({...o,colour:r.colour,qty:r.qty}))});ok(b.commit())}else ok(jc(k).doc(id).set(clean(o)));PH=null;if(k==="orders")TAB=NEWKIND==="sample"?"sample":"tna";if(!(next&&k==="issues"))QUEUE=[];KEEP=next&&k==="issues"?Object.assign({challan:o.challan,date:o.date,karigar:o.karigar,proc:o.proc},QUEUE.length?QUEUE.shift():{}):{};draw()}
+
+function calcMtr(src){const T=$("f_total"),A=$("f_topMtr"),B=$("f_dupMtr"),Q=$("f_qty"),n=$("fm");if(!T||!n)return;
+if(src==="total"&&T.value!==""){const d=B.value!==""?+B.value:2.6;B.value=d;A.value=Math.max(0,+T.value-d).toFixed(2)}
+else if(src==="topMtr"||src==="dupMtr"){if(T.value!==""){if(src==="dupMtr"&&B.value!=="")A.value=Math.max(0,+T.value-+B.value).toFixed(2);if(src==="topMtr"&&A.value!=="")B.value=Math.max(0,+T.value-+A.value).toFixed(2)}else if(A.value!==""&&B.value!=="")T.value=(+A.value+ +B.value).toFixed(2)}
+const t=+T.value||0,q=Q?(+Q.value||0):rowsQty();if(t>0&&q>0){n.hidden=false;n.textContent="Fabric needed: "+q+" pcs x "+t+" m = "+(q*t).toFixed(2)+" m (top "+(q*(+A.value||0)).toFixed(2)+" m + dupatta "+(q*(+B.value||0)).toFixed(2)+" m)"}else n.hidden=true}
+document.addEventListener("input",e=>{if(e.target.classList&&e.target.classList.contains("rq")){rowsSum();return}const i=e.target.id;if(["f_total","f_topMtr","f_dupMtr","f_qty"].includes(i))calcMtr(i.slice(2))});
+/* ---------- picker (scroll + search) ---------- */
+function items(kind){
+if(kind==="orders")return D.orders.map(x=>({l:x.jobCard,s:[x.kind==="sample"?"SAMPLE":"",x.design,x.brand,x.qty?"qty "+x.qty:""].filter(Boolean).join(" | "),o:x}));
+if(kind==="vendors")return D.vendors.filter(x=>!x.inactive).map(x=>({l:x.name,s:[x.gstin,x.address].filter(Boolean).join(" | "),o:x}));
+if(kind==="karigars")return D.karigars.filter(x=>!x.inactive).map(x=>({l:x.name,s:[x.proc,x.phone].filter(Boolean).join(" | "),o:x}));
+if(kind==="fabrics"||kind==="fabname")return D.fabrics.filter(x=>!x.inactive).map(x=>({l:x.fabNo,k:(x.name||"~")+" "+x.fabNo,s:(x.name||"")+(x.rate?" | Rs "+x.rate+"/m":""),o:x}));
+if(kind==="designs")return D.designs.map(x=>({l:x.design,s:[x.desc||"",can("rates")?costLine(x.design).replace(/<[^>]+>/g,""):""].filter(Boolean).join(" | "),o:x}));
+return D.issues.filter(x=>num(x.qty)-rcv(x.id)>0).map(x=>({l:x.id+" "+(x.design||"")+(x.colour?" ["+x.colour+"]":"")+(x.sample?" SAMPLE":""),s:(x.karigar||"")+" | pending "+(num(x.qty)-rcv(x.id)),o:x,v:x.id}))}
+function picker(kind,cb){CM={};const all=items(kind).sort((a,b)=>(a.k||a.l).localeCompare(b.k||b.l,0,{numeric:true}));const ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>Choose '+(kind==="fabname"?"fabric":MT[kind]||(kind==="orders"?"job card / sample":"challan line"))+'</h2><button class="btn s o" id="px">Close</button></div><input id="ps" placeholder="Search name, no, GST...." style="margin:8px 0"><div id="pl"></div>';document.body.appendChild(ov);
+let cat=kind==="karigars"?($("f_proc")?$("f_proc").value:$("f_altType")?altCat($("f_altType").value):""):"";
+const render=()=>{const q=$("ps").value.toLowerCase();const r=all.filter(x=>(!cat||x.o.proc===cat)&&(x.l+" "+x.s).toLowerCase().includes(q));let h=(cat?'<div class="row" data-i="-2"><b>Showing only '+esc(cat)+' karigars. Tap here to show all.</b></div>':"")+(q&&kind!=="lines"?'<div class="row" data-i="-1"><b>Use typed: '+esc($("ps").value)+"</b></div>":"");h+=r.map(x=>'<div class="row" data-i="'+all.indexOf(x)+'">'+(x.o&&x.o.ph?'<img class="ph" style="float:right;margin:0 0 0 8px" src="'+x.o.ph+'" alt="">':"")+'<b>'+esc(x.l)+'</b><div class="sm">'+esc(x.s)+"</div></div>").join("")||(q?"":'<div class="sm">Nothing here yet. Super admin can add it in Masters, or type below.</div>');$("pl").innerHTML=h};
+render();$("ps").oninput=render;$("px").onclick=()=>ov.remove();$("pl").onclick=e=>{const r=e.target.closest("[data-i]");if(!r)return;const i=+r.dataset.i;if(i===-2){cat="";render();return}ov.remove();cb(i<0?{typed:$("ps").value.trim()}:all[i])}}
+function pickInto(inp){const kind=inp.dataset.pick,k=inp.dataset.k;picker(kind,r=>{const set=(id,v)=>{const e=$("f_"+id);if(e&&v!=null)e.value=v};
+if(r.typed){set(k,r.typed);afterPick(k);return}const o=r.o;
+if(kind==="vendors"){set("vendor",o.name);set("gstin",o.gstin)}else if(kind==="karigars"){set("karigar",o.name);if(o.proc)set("proc",o.proc);if(TAB==="issues")autoFill()}
+else if(kind==="designs"){set("design",o.design);if(TAB==="issues")autoFill()}else if(kind==="orders"){set("jobCard",o.jobCard);const dz=$("f_design");if(dz&&!dz.value)set("design",o.design);if(TAB==="issues")autoFill()}else if(kind==="lines"){set("line",r.v);if(o.rate)set("rate",o.rate)}
+else if(kind==="fabrics"||kind==="fabname"){set(k,o.fabNo);if(k==="fabNo"&&$("f_item")&&!$("f_item").value)set("item",o.name)}afterPick(k)})}
+
+/* ---------- photo + bill reader ---------- */
+const toBlob=(file,max,q)=>new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);c.toBlob(res,"image/jpeg",q)};im.src=r.result};r.readAsDataURL(file)});
+const toUrl=b=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(b)});
+const loadJs=u=>new Promise((res,rej)=>{const s=document.createElement("script");s.src=u;s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+async function aiRead(file,kind){const b=await toBlob(file,1600,.8),b64=(await toUrl(b)).split(",")[1];return (await jwApi("ai-read",{image:b64,kind})).data}
+function fillAI(r,kind){const set=(id,v)=>{const e=$("f_"+id);if(e&&v!=null&&v!=="")e.value=v},msg=[],o2=(k,v)=>{if(v==null||v==="")return;set(k,v);msg.push(k)},dz=v=>String(v).replace(/[\s-]/g,"").toUpperCase(),isF=v=>/^F\s?-?\d+$/i.test(String(v||""));
+if(kind==="issues"){o2("challan",r.challan);o2("date",r.date);if(r.karigar){const kn=nearest(r.karigar,D.karigars.filter(x=>!x.inactive).map(x=>x.name));set("karigar",kn||r.karigar);msg.push(kn&&kn!==String(r.karigar).toUpperCase()?"karigar (matched "+kn+")":"karigar");const kk=kn&&D.karigars.find(x=>x.name===kn);if(kk&&kk.proc)set("proc",kk.proc)}const its=Array.isArray(r.items)?r.items:[];
+const m=it=>{const o={};if(it.design)o.design=dz(it.design);if(it.jobCard)o.jobCard=String(it.jobCard);if(it.colour)o.colour=String(it.colour);if(isF(it.topFab))o.topFab=dz(it.topFab);if(isF(it.dupFab))o.dupFab=dz(it.dupFab);if(it.total)o.total=it.total;if(it.qty)o.qty=it.qty;if(it.rate)o.rate=it.rate;return o};
+if(its.length){const G=groupItems(its.map(m)),f0=G.shift();Object.keys(f0).forEach(k=>k!=="rows"&&set(k,f0[k]));setRows(f0.rows);QUEUE=G;msg.push(its.length+" item(s)"+(G.length?", "+G.length+" more design(s) next":""));if(f0.total&&typeof calcMtr==="function")calcMtr("total")}}
+else if(kind==="inward"){["date","bill","po","vendor","gstin","item","qty","unit","rate","courier"].forEach(k=>o2(k,r[k]));if(isF(r.fabNo))o2("fabNo",dz(r.fabNo));
+if(r.vendor||r.gstin){const v=D.vendors.find(x=>(x.gstin&&r.gstin&&x.gstin.toUpperCase()===String(r.gstin).toUpperCase())||(r.vendor&&x.name.toUpperCase()===String(r.vendor).toUpperCase()));const vn=v?v.name:nearest(r.vendor,D.vendors.map(x=>x.name));if(vn){set("vendor",vn);const vv=D.vendors.find(x=>x.name===vn);if(vv&&vv.gstin&&!r.gstin)set("gstin",vv.gstin)}}}
+else if(kind==="orders"){["jobCard","orderDate","qty","orderType","topFab","dupFab","botFab","accessories","remarks"].forEach(k=>o2(k,r[k]));if(r.design){o2("design",dz(r.design));afterPick("design")}if(r.colours)o2("colours",splitC(Array.isArray(r.colours)?r.colours.join(","):r.colours).join(", "))}
+else if(kind==="deliveries"){["challan","date","qty","remarks"].forEach(k=>o2(k,r[k]));if(r.party)o2("party",nearest(r.party,optList("party"))||r.party);if(r.design)o2("design",dz(r.design))}
+return msg}
+const TESS="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js";let VADDR="";
+async function onPhoto(file){const st=$("pst");PH=await toUrl(await toBlob(file,640,.6));st.textContent="Photo attached.";VADDR="";
+if(!["inward","issues","deliveries","orders"].includes(TAB))return;
+if(!navigator.onLine){st.textContent="Photo attached (offline). Fill details by hand.";return}
+st.textContent="Photo attached. Reading with AI...";try{const r=await aiRead(file,TAB),msg=fillAI(r,TAB);st.textContent=msg.length?"Photo attached. Read: "+msg.join(", ")+". Please check everything before saving.":"Photo attached. Nothing could be read, fill by hand.";return}catch(e){if(!/not set up/i.test(e.message||"")){st.textContent="Photo attached. AI reading failed ("+(e.message||e)+"). Fill by hand.";return}}
+st.textContent="Photo attached. Reading text...";
+try{if(!window.Tesseract)await loadJs(TESS);const t=(await Tesseract.recognize(await toBlob(file,1600,.85),"eng")).data.text,set=(id,v,f)=>{const e=$("f_"+id);if(e&&v&&(f||!e.value))e.value=v},msg=[];
+const dt=t.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);if(dt&&+dt[1]<=31&&+dt[2]<=12){let y=+dt[3];if(y<100)y+=2000;set("date",y+"-"+String(dt[2]).padStart(2,"0")+"-"+String(dt[1]).padStart(2,"0"),true);msg.push("date")}
+const dn=t.match(/\b(SD|TY|RZ|MH|CR|GF|GBPL)\s?-?\s?(\d{3,6})\b/i);if(dn&&$("f_design")){set("design",(dn[1]+dn[2]).toUpperCase(),true);msg.push("design no")}
+const fn=[...new Set((t.match(/\bF\s?-?\d{2,4}\b/g)||[]).map(x=>x.replace(/[\s-]/g,"").toUpperCase()))];
+if(TAB==="inward"&&fn[0]){set("fabNo",fn[0]);msg.push("fabric no")}
+if(TAB==="issues"){if(fn[0]){set("topFab",fn[0]);msg.push("fabric no")}if(fn[1])set("dupFab",fn[1])}
+if(TAB==="inward"){const g=(t.match(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g)||[]).filter(x=>x!==OWN_GSTIN)[0];
+const b=(t.match(/(?:invoice|inv|bill)\s*(?:no|number|#)?\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{2,})/i)||[])[1];
+if(g){set("gstin",g,true);msg.push("GST");const v=D.vendors.find(x=>(x.gstin||"").toUpperCase()===g);
+if(v){set("vendor",v.name,true);msg.push("vendor "+v.name)}
+else{const L=t.split(/\n/).map(x=>x.trim()).filter(x=>x.length>=5),gi=L.findIndex(x=>x.includes(g)),bad=/invoice|challan|original|duplicate|gstin|tax|bill|copy|receipt/i,nm=L.slice(0,Math.max(gi,3)).find(x=>/[A-Za-z]{4,}/.test(x)&&!bad.test(x));
+if(nm){set("vendor",nm.replace(/[^A-Za-z0-9 &.()\-]/g,"").trim(),true);msg.push("vendor name (check it)");const i=L.indexOf(nm);VADDR=L.slice(i+1,i+3).join(", ")}}}
+if(b){set("bill",b);msg.push("bill no")}}
+st.textContent=msg.length?"Photo attached. Read: "+msg.join(", ")+". Please check before saving. New vendor, karigar, fabric no and design no are added to Masters automatically.":"Photo attached. Could not read the text, fill by hand."}
+catch(e){st.textContent="Photo attached. Reading failed ("+(e.message||e)+"). Fill by hand. Tip: ask the super admin to set up AI reading (GEMINI_API_KEY on Vercel)."}}
+
+/* ---------- lists ---------- */
+function item(c,x){let t,s,d=false;
+if(c==="issues"){const r=rcv(x.id),p=num(x.qty)-r;d=p<=0;t=x.id+" | "+(x.design||"")+(x.colour?" ["+x.colour+"]":"")+(x.sample?" | SAMPLE":"");s=esc(x.karigar||"")+" ("+esc(x.proc||"")+") "+esc(x.topFab||"")+(x.dupFab?" + "+esc(x.dupFab):"")+"<br>Issued "+x.qty+", received "+r+', <span class="'+(p>0?"bad":"ok")+'">balance '+p+"</span>"+(p>0?(overdue(x)?' <span class="bad"> | '+dsince(x)+" days, OVERDUE</span>":" | "+dsince(x)+" days"):"")+(can("rates")&&fcost(x)?"<br>Fabric value with karigar: Rs "+Math.round(fcost(x)*Math.max(p,0)):"")}
+else if(c==="receipts"){d=true;t="Received "+x.qty+" pcs | "+x.line;s=esc(x.date||"")+" "+esc(x.remarks||"")+(x.ready===false?" | not final stage":"")}
+else if(c==="orders"){t=(x.kind==="sample"?"SAMPLE ":"JC ")+x.jobCard+" | "+(x.design||"");s=esc(x.brand||"")+" | qty "+(x.qty||"")+" | delivery "+esc(x.deliveryDate||"")}
+else if(c==="alters"){const p=altPend(x),od=p>0&&x.due&&today()>x.due;d=p<=0;t="ALTER | "+(x.design||"")+(x.colour?" ["+x.colour+"]":"");s=esc(x.altType||"")+" | "+esc(x.karigar||"")+"<br>Sent "+x.qty+", returned "+altRet(x)+', <span class="'+(p>0?"bad":"ok")+'">pending '+p+"</span>"+(od?' <span class="bad">| OVERDUE</span>':"")+(x.reason?"<br>"+esc(x.reason):"")+((x.returns||[]).length?"<br>"+x.returns.map(y=>esc(y.d)+": "+y.q+" pcs").join("; "):"")+(p>0?'<br><button class="btn s" data-act="arecv" data-id="'+esc(x.id)+'">Receive back</button>':"")}
+else if(c==="deliveries"){d=true;t="Delivered "+x.qty+" pcs | "+(x.design||"");s=esc(x.party||"")+" | "+esc(x.date||"")+(x.challan?" | "+esc(x.challan):"")+(x.remarks?"<br>"+esc(x.remarks):"")}
+else{t=(x.bill||"Inward")+" | "+(x.vendor||"");s=esc(x.item||x.fabName||"")+" | "+iq(x)+" "+iu(x)+(x.rate?" @ Rs "+x.rate:"")+"<br>Our fabric "+esc(x.fabNo||"-")+" | "+esc(x.date||"")+(x.courier?" | "+esc(x.courier):"")+(x.po?" | PO "+esc(x.po):"")+(x.gstin?"<br>GST "+esc(x.gstin):"")}
+return '<div class="it c'+(String(x.karigar||x.vendor||x.line||"").split("").reduce((a,c)=>a+c.charCodeAt(0),0)%4)+(d?" d":"")+'"><div class="top"><span>'+esc(t)+"</span><span>"+(c==="issues"&&can("rates")&&x.design?'<button class="btn s o" data-act="cost" data-id="'+esc(x.design)+'" data-c="'+esc(x.jobCard||"")+'">Cost</button> ':"")+(["issues","receipts","deliveries","alters"].includes(c)?'<button class="btn s o" data-act="prt" data-c="'+c+'" data-id="'+esc(x.id)+'">Print</button> ':"")+(can("del")?'<button class="btn s r" data-act="del" data-c="'+c+'" data-id="'+esc(x.id)+'">Delete</button>':"")+'</span></div><div class="sm">'+s+"</div>"+(x.ph?'<img class="ph" src="'+x.ph+'" alt="">':"")+"</div>"}
+function lists(){const k=TAB,L=$("L");if(!L)return;CM={};let h="";
+if(k==="bal"){let ip=0,is=0,rc=0;D.inward.forEach(x=>{if(iu(x)==="Pcs")ip+=iq(x)});D.issues.forEach(x=>is+=num(x.qty));D.receipts.forEach(x=>rc+=num(x.qty));
+const ks=[...new Set(D.issues.map(x=>x.karigar||"-"))].sort();
+h='<div class="stats"><div><b>'+ip+'</b><span>Fabric pcs in</span></div><div><b>'+is+'</b><span>Issued</span></div><div><b class="'+(is-rc?"bad":"ok")+'">'+(is-rc)+'</b><span>With karigars</span></div></div>';
+h+=dayCard();h+='<div class="card"><div class="g"><div><label>Karigar</label><select id="qk" data-act="qk"><option value="">All</option>'+ks.map(v=>"<option"+(v===QK?" selected":"")+">"+esc(v)+"</option>").join("")+'</select></div><div><label>Search</label><input id="qq" placeholder="design, fabric, challan" value="'+esc(Q)+'"></div></div><button class="btn o" data-act="ovd">'+(OVD?"Show all":"Show only overdue ("+D.issues.filter(overdue).length+")")+'</button><button class="btn o" data-act="prt" data-c="bal" data-id="">Print pending list</button></div>';
+const q=Q.toLowerCase(),rows=D.issues.filter(x=>(!OVD||overdue(x))&&(!QK||x.karigar===QK)&&(!q||[x.id,x.design,x.topFab,x.dupFab,x.jobCard,x.karigar,x.desc].join(" ").toLowerCase().includes(q))).sort((a,b)=>(num(a.qty)-rcv(a.id)>0?0:1)-(num(b.qty)-rcv(b.id)>0?0:1)).slice(0,80);
+h+=rows.length?'<div class="card">'+rows.map(x=>item("issues",x)).join("")+"</div>":'<div class="card sm">No entries found.</div>';
+if(q){const m=D.inward.filter(x=>[x.vendor,x.item,x.fabNo,x.bill,x.courier,x.gstin,x.fabName].join(" ").toLowerCase().includes(q)).slice(0,30);if(m.length)h+='<div class="card"><h2>Fabric inward matches</h2>'+m.map(x=>item("inward",x)).join("")+"</div>"}
+const vs={};D.inward.forEach(x=>{const v=x.vendor||"-",o=vs[v]=vs[v]||{n:0,p:0,m:0,a:0};o.n++;if(iu(x)==="Pcs")o.p+=iq(x);else o.m+=iq(x);o.a+=iq(x)*num(x.rate)});
+const vk=Object.keys(vs).sort();if(vk.length)h+='<div class="card"><h2>Received by vendor</h2>'+vk.map(v=>{const o=vs[v];return '<div class="row"><b>'+esc(v)+'</b><div class="sm">'+o.n+" entries | "+o.p+" pcs | "+o.m.toFixed(1)+" mtr"+(can("rates")?" | Rs "+Math.round(o.a):"")+"</div></div>"}).join("")+"</div>";
+const st={};D.inward.forEach(x=>{if(x.fabNo&&iu(x)==="Mtr")st[x.fabNo]=(st[x.fabNo]||0)+iq(x)});D.issues.forEach(x=>{if(x.topFab)st[x.topFab]=(st[x.topFab]||0)-num(x.topMtr)*num(x.qty);if(num(x.dupMtr)>0){const d=x.dupFab||x.topFab;if(d)st[d]=(st[d]||0)-num(x.dupMtr)*num(x.qty)}});
+const sk=Object.keys(st);if(sk.length)h+='<div class="card"><h2>Fabric stock (inward minus issued, mtr)</h2>'+sk.sort().map(f=>'<div class="top"><span>'+esc(f)+'</span><span class="'+(st[f]<0?"bad":"")+'">'+st[f].toFixed(1)+"</span></div>").join("")+"</div>"}
+else if(k==="alters"){const a=D.alters.slice().sort((x,y)=>(altPend(y)>0)-(altPend(x)>0)||String(y.at||"").localeCompare(String(x.at||""))).slice(0,60),tp=D.alters.reduce((t,x)=>t+altPend(x),0);h='<div class="card"><h2>In alteration now: '+tp+' pcs</h2><div class="sm">Pending ones are shown first. Use Receive back when goods return.</div></div>'+(a.length?'<div class="card">'+a.map(x=>item("alters",x)).join("")+"</div>":'<div class="card sm">No alteration entries yet.</div>')}
+else if(D[k]&&FF[k]){const a=D[k].slice().sort((x,y)=>String(y.at||"").localeCompare(String(x.at||""))).slice(0,30);h=a.length?'<div class="card"><h2>Recent</h2>'+a.map(x=>item(k,x)).join("")+"</div>":""}
+else if(k==="stock"){h=stockView()}
+else if(k==="ledger"){h=ledgerView()}
+else if(k==="tna"){h=tnaView()}
+else if(k==="sample"){h=tnaView("sample")}
+else if(k==="cost"){h=costView()}
+else if(k==="mast"){h=mastView()}
+else if(k==="more"){h=moreView()}
+L.innerHTML=h;const qq=$("qq");if(qq){qq.oninput=()=>{Q=qq.value;const p=qq.selectionStart;lists();const n=$("qq");n.focus();n.setSelectionRange(p,p)}}
+const sqi=$("sq");if(sqi){sqi.oninput=()=>{SQ=sqi.value;const p=sqi.selectionStart;lists();const n=$("sq");n.focus();n.setSelectionRange(p,p)}}
+const ms=$("mq");if(ms){ms.oninput=()=>{MQ=ms.value;const p=ms.selectionStart;lists();const n=$("mq");n.focus();n.setSelectionRange(p,p)}}}
+let MQ="",SK="des",SQ="",MINC=false,MCAT="",QUEUE=[],NEWKIND="order";
+function mastView(){const k=MK,q=MQ.toLowerCase();const a=D[k].filter(x=>(!MINC||x.auto)&&(k!=="karigars"||!MCAT||x.proc===MCAT)&&(!q||Object.values(x).join(" ").toLowerCase().includes(q))).sort((x,y)=>String(x[MKEY[k]]).localeCompare(String(y[MKEY[k]]),0,{numeric:true}));
+return '<div class="seg" style="margin-top:8px">'+Object.keys(MT).map(m=>'<button class="'+(m===MK?"on":"")+'" data-act="mk" data-v="'+m+'">'+MT[m]+"</button>").join("")+'</div><div class="card"><input id="mq" placeholder="Search '+MT[k].toLowerCase()+'" value="'+esc(MQ)+'">'+(k==="karigars"?'<label>Category</label><select id="mc"><option value="">All categories</option>'+PL().map(c=>"<option"+(c===MCAT?" selected":"")+">"+esc(c)+"</option>").join("")+"</select>":"")+(D[k].some(x=>x.auto)?'<button class="btn o" data-act="minc">'+(MINC?"Show all":"Show only "+D[k].filter(x=>x.auto).length+" needing details")+"</button>":"")+''+(((k==="categories"||k==="alttypes")?can("masters"):(can("add")||can("masters")))?'<button class="btn" data-act="madd">+ Add '+MT[k].slice(0,-1).toLowerCase()+"</button>":"")+"</div>"+
+'<div class="card">'+(a.length?a.map(x=>'<div class="row" data-act="medit" data-id="'+esc(x.id)+'">'+(x.ph?'<img class="ph" style="float:right;margin:0 0 0 8px" src="'+x.ph+'" alt="">':"")+'<b>'+esc(x[MKEY[k]])+"</b>"+(x.inactive?' <span class="chip">not working now</span>':"")+(x.auto?' <span class="chip">details needed</span>':"")+"<div class=\"sm\">"+MF[k].slice(1).map(f=>x[f[0]]?esc(f[1])+": "+esc(x[f[0]]):"").filter(Boolean).join(" | ")+"</div>"+(k==="designs"&&can("rates")&&costLine(x.design)?'<div class="sm">'+costLine(x.design)+"</div>":"")+"</div>").join(""):'<div class="sm">Nothing here yet.</div>')+"</div>"}
+let MPH=null;
+function mform(x){const k=MK,edit=!!x,full=can("masters"),nm=MT[k].slice(0,-1).toLowerCase(),hasPh=k==="designs"||k==="fabrics",po=edit&&!full&&hasPh&&can("add");
+if(edit&&!full&&!po)return toast("Only users with master rights can edit");MPH=null;
+const ov=document.createElement("div");ov.className="ov",im=u=>'<img class="ph" style="width:130px;height:130px" src="'+u+'" alt="">';
+const phh=hasPh?'<div id="mpv">'+(x&&x.ph?im(x.ph):"")+'</div><button class="btn o" id="mpb">'+(x&&x.ph?"Change photo":"Add photo")+'</button><input id="mpf" type="file" accept="image/*" hidden>':"";
+ov.innerHTML='<div class="bar"><h2>'+(edit?"Edit ":"Add ")+nm+'</h2><button class="btn s o" id="mx">Close</button></div><div class="card">'+(po?'<div style="font-weight:700;font-size:19px">'+esc(x[MKEY[k]])+'</div><div class="sm">You can add or change the photo only.</div>':formHtml(MF[k],x||{}))+phh+(k!=="designs"&&edit&&!po?'<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" id="m_off" style="width:auto"'+(x.inactive?" checked":"")+'> Not working with this '+nm+' now (hide from lists)</label>':"")+'<button class="btn" id="ms">Save</button>'+(edit&&full?'<button class="btn r" id="md">Delete permanently</button>':"")+"</div>";document.body.appendChild(ov);
+$("mx").onclick=()=>ov.remove();
+if($("mpb")){$("mpb").onclick=()=>$("mpf").click();$("mpf").onchange=async()=>{const f=$("mpf").files[0];if(!f)return;MPH=await toUrl(await toBlob(f,640,.6));$("mpv").innerHTML=im(MPH)}}
+$("ms").onclick=()=>{if(po){if(!MPH)return toast("Choose a photo first");ok(jc(k).doc(x.id).set({ph:MPH},{merge:true}));ov.remove();return}
+const o=collect(MF[k]);const bad=chk(o);if(bad)return toast(bad);if(!o[MKEY[k]])return toast("Fill "+MF[k][0][1]);
+if(o.gstin){o.gstin=o.gstin.toUpperCase().replace(/\s/g,"");if(!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(o.gstin))return toast("GST number looks wrong")}
+if($("m_off"))o.inactive=$("m_off").checked;o.auto=false;if(MPH)o.ph=MPH;const id=edit?x.id:String(o[MKEY[k]]).toUpperCase().replace(/[^A-Z0-9]+/g,"_");ok(jc(k).doc(id).set(clean(o),{merge:true}));ov.remove()};
+if($("md"))$("md").onclick=()=>{if(confirm("Delete this "+nm+" permanently? Old entries stay, but it will not appear in lists.")){jc(k).doc(x.id).delete().then(()=>toast("Deleted")).catch(()=>toast("No permission"));ov.remove()}}}
+const dsince=x=>Math.max(0,Math.round((new Date(today())-new Date(x.date||today()))/864e5));
+const SET=()=>Object.assign({tds:1,std:1.5,od:15},D.settings.find(x=>x.id==="main")||{});
+const overdue=x=>{const p=num(x.qty)-rcv(x.id);if(p<=0)return false;return x.due?today()>x.due:dsince(x)>num(SET().od)};
+let OVD=false,SDATE="",LK="";
+const COMP={n:"GFIVE DESIGNERS COUTURE PRIVATE LIMITED",a:"113, Park Street, Poddar Point, Block-A, 3rd Floor, Kolkata - 700016, West Bengal",g:"GSTIN: 19AAJCG3693D1ZD"};
+function printDoc(title,body){let pv=$("pv");if(pv)pv.remove();pv=document.createElement("div");pv.id="pv";
+pv.innerHTML='<div class="phd"><b>'+COMP.n+"</b><br>"+COMP.a+"<br>"+COMP.g+'</div><h3 style="text-align:center;margin:8px 0">'+esc(title)+"</h3>"+body;document.body.appendChild(pv);
+const z=document.body.style.zoom;document.body.style.zoom=1;const done=()=>{document.body.style.zoom=z;pv.remove();removeEventListener("afterprint",done)};addEventListener("afterprint",done);setTimeout(()=>print(),200)}
+const TB=(h,rows)=>"<table><tr>"+h.map(x=>"<th>"+esc(x)+"</th>").join("")+"</tr>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</table>";
+const KV=a=>"<table>"+a.map(r=>'<tr><th style="width:35%">'+esc(r[0])+"</th><td>"+esc(r[1])+"</td></tr>").join("")+"</table>";
+const SIG='<div class="sig"><div>Jobber / Party signature</div><div>Authorised signatory</div></div>';
+function recAmt(r){const l=issOf(r.line)||{},rt=r.rate!=null&&r.rate!==""?num(r.rate):num(l.rate),g=num(r.qty)*rt,st=SET(),sd=Math.round(g*st.std/100),td=Math.floor(g*st.tds/100);return{l,rt,g,sd,td,net:g-sd-td}}
+function ledgerRows(k){const rs=[];D.receipts.forEach(r=>{const a=recAmt(r);if(a.l.karigar!==k)return;rs.push({d:r.date||"",t:"R",ref:r.line,det:(a.l.design||"")+" | "+num(r.qty)+" pcs @ "+a.rt,cr:a.g,id:r.id})});
+D.payments.forEach(p=>{if(p.karigar===k)rs.push({d:p.date||"",t:"P",ref:p.mode||"",det:p.remarks||"",pay:num(p.amount),id:p.id})});
+D.alters.forEach(x=>{if(x.karigar!==k||!num(x.rate))return;(x.returns||[]).forEach(y=>rs.push({d:y.d||"",t:"R",ref:"ALT",det:(x.design||"")+" alteration | "+num(y.q)+" pcs @ "+num(x.rate),cr:num(y.q)*num(x.rate),id:x.id}))});
+return rs.sort((a,b)=>String(a.d).localeCompare(String(b.d)))}
+function ledgerTot(k){const rs=ledgerRows(k);let g=0,pd=0;rs.forEach(r=>{if(r.t==="R")g+=r.cr;else pd+=r.pay});const st=SET(),sd=Math.round(g*st.std/100),td=Math.floor(g*st.tds/100);return{g,sd,td,net:g-sd-td,pd,bal:g-sd-td-pd,rs}}
+function ledgerView(){if(!can("ledger"))return '<div class="card">No access.</div>';
+if(!LK){const ks=[...new Set(D.issues.map(x=>x.karigar).filter(Boolean))].sort();
+return '<div class="card"><h2>Karigar ledger</h2><div class="sm">Tap a karigar to open the statement.</div></div>'+(ks.map(k=>{const t=ledgerTot(k);return '<div class="it '+cc(k)+'" data-act="lk" data-v="'+esc(k)+'"><div class="top"><span>'+esc(k)+'</span><span class="'+(t.bal>0?"bad":"ok")+'">Balance Rs '+Math.round(t.bal)+'</span></div><div class="sm">Net Rs '+Math.round(t.net)+" | Paid Rs "+Math.round(t.pd)+"</div></div>"}).join("")||'<div class="card sm">No issues yet.</div>')}
+const t=ledgerTot(LK);let run=0;
+return '<div class="card"><div class="top"><h2>'+esc(LK)+'</h2><button class="btn s o" data-act="lk" data-v="">Back</button></div>'+
+'<div class="stats"><div><b>'+Math.round(t.g)+'</b><span>Gross Rs</span></div><div><b>'+Math.round(t.net)+'</b><span>Net after TDS</span></div><div><b class="'+(t.bal>0?"bad":"ok")+'">'+Math.round(t.bal)+"</b><span>Balance Rs</span></div></div>"+
+'<div class="sm" style="margin-top:8px">Std deduction '+SET().std+"% = Rs "+t.sd+" | TDS "+SET().tds+"% = Rs "+t.td+" | Paid Rs "+Math.round(t.pd)+'</div><button class="btn" data-act="padd">+ Add payment</button><button class="btn o" data-act="prt" data-c="ledger" data-id="'+esc(LK)+'">Print statement</button></div>'+
+'<div class="card">'+(t.rs.map(r=>{run+=r.t==="R"?r.cr:-r.pay;return '<div class="row"><div class="top"><span>'+esc(r.d)+" "+(r.t==="R"?"Received":"Payment")+'</span><span class="'+(r.t==="R"?"":"ok")+'">'+(r.t==="R"?"+"+Math.round(r.cr):"-"+Math.round(r.pay))+'</span></div><div class="sm">'+esc(r.ref)+" "+esc(r.det)+" | running Rs "+Math.round(run)+(r.t==="P"&&can("del")?' <button class="lk" style="color:var(--bad)" data-act="pdel" data-id="'+esc(r.id)+'">Delete</button>':"")+"</div></div>"}).join("")||'<div class="sm">No receipts or payments yet.</div>')+"</div>"}
+function pform(){const ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>Payment to '+esc(LK)+'</h2><button class="btn s o" id="px2">Close</button></div><div class="card"><label>Date</label><input id="pd" type="date" value="'+today()+'"><label>Amount Rs</label><input id="pa" type="number" inputmode="decimal"><label>Mode</label><select id="pm"><option>Cash</option><option>Bank transfer</option><option>UPI</option><option>Cheque</option></select><label>Reference / remarks</label><input id="pr"><button class="btn" id="ps2">Save payment</button></div>';document.body.appendChild(ov);
+$("px2").onclick=()=>ov.remove();$("ps2").onclick=()=>{const a=+$("pa").value;if(!(a>0))return toast("Enter amount");ok(jc("payments").doc("P"+Date.now().toString(36)).set(clean({karigar:LK,date:$("pd").value,amount:a,mode:$("pm").value,remarks:$("pr").value.trim(),at:new Date().toISOString(),by:ME.name})));ov.remove()}}
+function doPrint(c,id){
+if(c==="issues"){const x=D.issues.find(y=>y.id===id);if(!x)return;const k=D.karigars.find(y=>y.name===x.karigar)||{},mt=num(x.topMtr)+num(x.dupMtr);
+printDoc("JOB WORK ISSUE CHALLAN",KV([["Challan / line no",x.id],["Date",x.date],["Karigar",x.karigar],["Mobile",k.phone||""],["Category",x.proc||""],["Design no",x.design||""],["Job card no",x.jobCard||""],["Top fabric",(x.topFab||"")+"  "+num(x.topMtr)+" m/pc"],["Dupatta fabric",(x.dupFab||x.topFab||"")+"  "+num(x.dupMtr)+" m/pc"],["Qty issued (pcs)",x.qty],["Total fabric issued (m)",(mt*num(x.qty)).toFixed(2)]].concat(can("rates")?[["Job rate Rs/pc",x.rate||""]]:[],[["Return by",x.due||""],["Remarks",x.remarks||x.desc||""]]))+SIG)}
+else if(c==="receipts"){const r=D.receipts.find(y=>y.id===id);if(!r)return;const a=recAmt(r);
+printDoc("JOBBER RECEIVE MEMO",KV([["Receipt no",r.remarks||r.id],["Date",r.date],["Karigar",a.l.karigar||""],["Against challan line",r.line],["Design no",a.l.design||""],["Qty received (pcs)",r.qty]].concat(can("rates")?[["Rate Rs/pc",a.rt],["Amount Rs",a.g],["Std deduction "+SET().std+"% Rs",a.sd],["TDS "+SET().tds+"% Rs",a.td],["Net amount Rs",a.net]]:[]))+SIG)}
+else if(c==="deliveries"){const x=D.deliveries.find(y=>y.id===id);if(!x)return;
+printDoc("DELIVERY CHALLAN",KV([["Delivery challan no",x.challan||x.id],["Date",x.date],["Delivered to",x.party||""],["Design no",x.design||""],["Qty delivered (pcs)",x.qty],["Remarks",x.remarks||""]])+SIG)}
+else if(c==="challan"){const L=D.issues.filter(x=>String(x.challan)===String(id)).sort((a,b)=>String(a.id).localeCompare(String(b.id),0,{numeric:true}));if(!L.length)return;const f=L[0],k=D.karigars.find(y=>y.name===f.karigar)||{};
+printDoc("JOB WORK ISSUE CHALLAN - "+id,KV([["Challan no",id],["Date",f.date],["Karigar",f.karigar],["Mobile",k.phone||""],["Category",f.proc||""]])+TB(["#","Design","Job card","Colour","Top fabric","Dup fabric","Mtr/pc","Qty","Total mtr"].concat(can("rates")?["Rate"]:[]),L.map((x,i)=>[i+1,x.design,x.jobCard||"",x.colour||"",x.topFab||"",x.dupFab||x.topFab||"",num(x.topMtr)+num(x.dupMtr),x.qty,((num(x.topMtr)+num(x.dupMtr))*num(x.qty)).toFixed(2)].concat(can("rates")?[x.rate||""]:[])))+SIG)}
+else if(c==="alters"){const x=D.alters.find(y=>y.id===id);if(!x)return;const k=D.karigars.find(y=>y.name===x.karigar)||{};
+printDoc("ALTERATION CHALLAN",KV([["Challan no",x.challan||x.id],["Date",x.date],["Karigar",x.karigar],["Mobile",k.phone||""],["Alteration work",x.altType||""],["Design no",x.design||""],["Job card / sample",x.jobCard||""],["Colour",x.colour||""],["Qty (pcs)",x.qty],["What to alter",x.reason||""],["Return by",x.due||""],["Returned so far",altRet(x)],["Pending",altPend(x)]].concat(can("rates")&&x.rate?[["Alteration rate Rs/pc",x.rate]]:[]))+SIG)}
+else if(c==="jobcard"){const o=D.orders.find(y=>y.id===id);if(!o)return;const t=tnaOf(o);
+printDoc("JOB CARD  S.No "+o.jobCard,KV([["Date",o.orderDate||""],["Design no",o.design],["Order type",o.orderType||""],["Qty (pcs)",o.qty],["Brand",o.brand||""],["Colours",o.colours||""],["Fabric",(o.topFab||"")+" (top) | "+(o.dupFab||"")+" (dupatta) | "+(o.botFab||"")+" (bottom)"],["Accessories",o.accessories||""],["Delivery date",o.deliveryDate||""]])+
+"<b>Size cut</b>"+KV([["Vendor",o.scVendor||""],["PO no and date",o.scPo||""],["Issue date and person",[o.scDate,o.scBy].filter(Boolean).join(" ")]])+
+"<b>Cutting</b>"+KV([["Issue date and person",[o.cutDate,o.cutBy].filter(Boolean).join(" ")],["Qty cut",o.cutQty||""]])+
+t.st.map(g=>"<b>"+esc(g.st)+" - "+esc(g.ks.join(", "))+"</b>"+TB(["Challan","Karigar","Colour","Qty out","Issue date","Received"],g.lines.map(l=>[l.ch,l.k,l.col||"",l.q,l.d,l.rc.map(r=>r.q+" on "+r.d).join(", ")||"pending"]))).join("")+KV([["Status",t.status]]))}
+else if(c==="tna"){const rows=D.orders.filter(o=>id==="sample"?o.kind==="sample":o.kind!=="sample").sort((a,b)=>String(a.deliveryDate||"9").localeCompare(String(b.deliveryDate||"9")));printDoc((id==="sample"?"SAMPLE TNA":"TNA - PRODUCTION STATUS")+" (as on "+today()+")",TB(["Design","Job card","Brand","Qty","Order","Delivery","Status","Dyeing","Hand/Emb","Stitch/Fin","Delivered"],rows.map(o=>{const t=tnaOf(o),f=n=>{const g=t.st.find(y=>y.st===n);return g?g.ks.join(", ")+" "+g.qr+"/"+g.qi+(g.days!==""?" ("+g.days+"d)":""):"-"};return [o.design,o.jobCard,o.brand||"",o.qty,o.orderDate||"",o.deliveryDate||"",t.status,f("Dyeing"),f("Hand / Embroidery / Print"),f("Stitching & Finishing"),t.del]})))}
+else if(c==="bal"){const rows=D.issues.filter(x=>num(x.qty)-rcv(x.id)>0).sort((a,b)=>String(a.karigar).localeCompare(String(b.karigar))||String(a.date).localeCompare(String(b.date)));
+printDoc("PENDING WITH KARIGARS (as on "+today()+")",TB(["Karigar","Challan line","Date","Design","Issued","Received","Pending","Days"],rows.map(x=>[x.karigar,x.id,x.date,x.design,x.qty,rcv(x.id),num(x.qty)-rcv(x.id),dsince(x)])))}
+else if(c==="stock"){if(SK==="fab")printDoc("FABRIC STOCK (as on "+today()+")",TB(["F no","Name","Unit","Inward","Issued","Balance"],stockFab().map(x=>[x.n,x.name,x.u,x.in.toFixed(2),x.used.toFixed(2),x.bal.toFixed(2)])));
+else printDoc("DESIGN STOCK (as on "+today()+")",TB(["Design","Issued","Received","With karigars","Delivered","Ready stock"],stockDes().map(x=>[x.n,x.iss,x.rec,x.wip,x.del,x.stock])))}
+else if(c==="ledger"){const t=ledgerTot(id);let run=0;
+printDoc("KARIGAR LEDGER - "+id,TB(["Date","Type","Ref","Detail","Received Rs","Paid Rs","Running Rs"],t.rs.map(r=>{run+=r.t==="R"?r.cr:-r.pay;return [r.d,r.t==="R"?"Received":"Payment",r.ref,r.det,r.t==="R"?Math.round(r.cr):"",r.t==="P"?Math.round(r.pay):"",Math.round(run)]}))+KV([["Gross Rs",Math.round(t.g)],["Std deduction "+SET().std+"% Rs",t.sd],["TDS "+SET().tds+"% Rs",t.td],["Net payable Rs",Math.round(t.net)],["Paid Rs",Math.round(t.pd)],["Balance Rs",Math.round(t.bal)]]))}}
+function autoFill(){const g=i=>$("f_"+i),kar=g("karigar")&&g("karigar").value.trim(),des=g("design")&&g("design").value.trim();if(!des)return;
+const m=D.issues.filter(x=>x.design===des).sort((a,b)=>String(b.at||"").localeCompare(String(a.at||""))),p=m.find(x=>x.karigar===kar)||m[0];if(!p)return;
+["rate","topFab","dupFab","topMtr","dupMtr","total"].forEach(a=>{const e=g(a);if(e&&!e.value&&p[a]!=null)e.value=p[a]});if(typeof calcMtr==="function")calcMtr("")}
+function dayCard(){const d=SDATE||today(),f=a=>a.filter(x=>x.date===d),sum=(a,fn)=>f(a).reduce((t,x)=>t+fn(x),0);
+return '<div class="card"><h2>Day summary</h2><input type="date" id="sd" value="'+d+'"><div class="stats" style="margin-top:8px"><div><b>'+f(D.inward).length+'</b><span>Inward bills</span></div><div><b>'+sum(D.issues,x=>num(x.qty))+'</b><span>Issued pcs</span></div><div><b>'+sum(D.receipts,x=>num(x.qty))+'</b><span>Received pcs</span></div></div><div class="sm" style="margin-top:6px">Delivered '+sum(D.deliveries,x=>num(x.qty))+" pcs | Fabric inward "+sum(D.inward,x=>iu(x)==="Mtr"?iq(x):0).toFixed(1)+" m</div></div>"}
+function oform(){const ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>Opening stock</h2><button class="btn s o" id="ox">Close</button></div><div class="card"><label>Type</label><select id="ot"><option value="fab">Fabric (F no)</option><option value="des">Design (ready stock)</option></select><label>F no or design no</label><input id="ok_k" list="okl"><datalist id="okl"></datalist><div class="g"><div><label>Quantity</label><input id="oq" type="number" step="0.01" inputmode="decimal"></div><div><label>Unit (fabric)</label><select id="ou"><option>Mtr</option><option>Pcs</option></select></div></div><label>Rate Rs per mtr / pc (optional, used in costing)</label><input id="orate" type="number" step="0.01" inputmode="decimal"><label>As on date</label><input id="od" type="date" value="'+today()+'"><button class="btn" id="os">Save opening stock</button></div>';document.body.appendChild(ov);
+const fill=()=>{$("okl").innerHTML=($("ot").value==="fab"?D.fabrics.map(x=>x.fabNo):D.designs.map(x=>x.design)).map(v=>'<option value="'+esc(v)+'">').join("")};fill();$("ot").onchange=fill;$("ox").onclick=()=>ov.remove();
+$("os").onclick=()=>{const t=$("ot").value;let k=$("ok_k").value.replace(/[\s-]/g,"").toUpperCase();const q=+$("oq").value;if(!k||!(q>0))return toast("Enter number and quantity");if(t==="fab"&&!/^F\d+$/.test(k))return toast("Fabric no must start with F");if(t==="des"&&!/^[A-Z]{1,3}\d+$/.test(k))return toast("Design no like SD11375");
+ok(jc("opening").doc("O"+Date.now().toString(36)).set(clean({type:t,key:k,qty:q,unit:t==="fab"?$("ou").value:"Pcs",rate:+$("orate").value||undefined,date:$("od").value,at:new Date().toISOString(),by:ME.name})));ov.remove()}}
+const STAGE=p=>p==="Dyeing"?"Dyeing":p==="Tailor / Finishing"?"Stitching & Finishing":"Hand / Embroidery / Print";
+const dd=(a,b)=>a&&b?Math.round((new Date(b)-new Date(a))/864e5):"";
+let TQ="",TLATE=false;
+const jcInfo=o=>{const a=[];if(o.orderType)a.push("<b>"+esc(o.orderType)+"</b>");if(o.colours)a.push("Colours: "+esc(o.colours));if(o.topFab||o.dupFab||o.botFab)a.push("Fabric: top "+esc(o.topFab||"-")+" | dupatta "+esc(o.dupFab||"-")+" | bottom "+esc(o.botFab||"-"));if(o.accessories)a.push("Accessories: "+esc(o.accessories));
+if(o.scDate||o.scVendor||o.scPo||o.scBy)a.push("Size cut: "+[o.scVendor,o.scPo?"PO "+o.scPo:"",o.scDate,o.scBy].filter(Boolean).map(esc).join(" | "));if(o.cutDate||o.cutBy||o.cutQty)a.push("Cutting: "+[o.cutDate,o.cutBy,o.cutQty?o.cutQty+" pcs":""].filter(Boolean).map(esc).join(" | "));return a.map(x=>'<div class="sm">'+x+"</div>").join("")};
+function tnaOf(o){const one=D.orders.filter(y=>y.design===o.design).length===1;
+const L=D.issues.filter(x=>(x.jobCard&&x.jobCard===o.jobCard)||(!x.jobCard&&one&&x.design===o.design)),G={};
+L.forEach(x=>{const k=STAGE(x.proc),g=G[k]=G[k]||{st:k,ks:[],ch:[],iss:"",rcv:"",qi:0,qr:0,lines:[]};g.lines.push({ch:x.challan||x.id,q:num(x.qty),d:x.date||"",k:x.karigar||"",col:x.colour||"",by:x.by||"",rc:D.receipts.filter(r=>r.line===x.id).map(r=>({d:r.date||"",q:num(r.qty)}))});if(x.karigar&&!g.ks.includes(x.karigar))g.ks.push(x.karigar);g.ch.push(x.challan||x.id);g.qi+=num(x.qty);if(x.date&&(!g.iss||x.date<g.iss))g.iss=x.date;
+D.receipts.filter(r=>r.line===x.id).forEach(r=>{g.qr+=num(r.qty);if(r.date&&(!g.rcv||r.date>g.rcv))g.rcv=r.date})});
+const st=Object.values(G).sort((a,b)=>String(a.iss).localeCompare(String(b.iss)));st.forEach(g=>{g.done=g.qr>=g.qi;g.days=dd(g.iss,g.done?g.rcv:today())});
+const del=D.deliveries.filter(d=>d.design===o.design).reduce((t,d)=>t+num(d.qty),0),pend=st.find(g=>!g.done);
+const status=o.status||(del>=num(o.qty)&&num(o.qty)>0?"Delivered":pend?"At "+pend.st+" ("+pend.ks.join(", ")+")":!st.length?"Not started":o.whIn?"In warehouse":o.packStart?"Packing":"Ready for packing");
+const left=o.deliveryDate?dd(today(),o.deliveryDate):"";return{st,del,status,left,late:!!o.deliveryDate&&left<0&&del<num(o.qty)}}
+function tnaView(kind){const sm=kind==="sample",q=TQ.toLowerCase();
+let rows=D.orders.filter(o=>sm?o.kind==="sample":o.kind!=="sample").map(o=>({o,t:tnaOf(o)})).filter(x=>(!TLATE||x.t.late)&&(!q||[x.o.design,x.o.jobCard,x.o.brand].join(" ").toLowerCase().includes(q))).sort((a,b)=>String(a.o.deliveryDate||"9").localeCompare(String(b.o.deliveryDate||"9")));
+let h='<div class="card"><h2>'+(sm?"Sample TNA":"TNA (time and action)")+'</h2><div class="sm">Order se delivery tak har design ka status. Stage karigar ki issue aur receive entries se apne aap banta hai.</div><input id="tq" placeholder="Search design, job card, brand" value="'+esc(TQ)+'" style="margin-top:8px">'+(can("add")?'<button class="btn" data-act="onew" data-v="'+(sm?"sample":"order")+'">'+(sm?"+ New sample":"+ New order / job card")+'</button>':"")+'<button class="btn o" data-act="tlate">'+(TLATE?"Show all":"Show only delayed ("+D.orders.filter(o=>(sm?o.kind==="sample":o.kind!=="sample")&&tnaOf(o).late).length+")")+'</button><button class="btn o" data-act="prt" data-c="tna" data-id="'+(sm?"sample":"")+'">Print '+(sm?"sample TNA":"TNA")+'</button></div>';
+h+=rows.length?rows.slice(0,100).map(x=>{const o=x.o,t=x.t;return '<div class="it '+cc(o.brand||o.design)+(t.status==="Delivered"?" d":"")+'" data-act="oedit" data-id="'+esc(o.id)+'"><div class="top"><span>'+esc(o.design)+" | JC "+esc(o.jobCard)+'</span><span class="'+(t.late?"bad":"")+'">'+(t.late?"DELAYED "+(-t.left)+"d":t.left!==""&&t.status!=="Delivered"?t.left+" days left":"")+'</span></div><div class="sm">'+esc(o.brand||"")+(o.party?" | for "+esc(o.party):"")+" | Qty "+(o.qty||"")+" | Order "+esc(o.orderDate||"")+" | Delivery "+esc(o.deliveryDate||"-")+"</div>"+(can("rates")&&costLine(o.design)?'<div class="sm">'+costLine(o.design)+"</div>":"")+
+jcInfo(o)+t.st.map(g=>'<div class="sm"><b>'+g.st+":</b> "+esc(g.ks.join(", "))+" | "+esc(g.iss)+" to "+esc(g.done?g.rcv:"pending")+" | "+g.qr+"/"+g.qi+" pcs"+(g.days!==""?" | "+g.days+" days":"")+(g.done?"":' <span class="bad">pending</span>')+"</div>"+g.lines.map(l=>'<div class="sm" style="padding-left:12px">&bull; Ch '+esc(l.ch)+" "+esc(l.k)+(l.col?" ["+esc(l.col)+"]":"")+": "+l.q+" pcs, issued "+esc(l.d)+(l.by?" by "+esc(l.by):"")+(l.rc.length?"; received "+l.rc.map(r=>r.q+" on "+esc(r.d)).join(", "):"; pending")+"</div>").join("")).join("")+
+'<div class="sm"><b>Warehouse / delivered:</b> '+t.del+" pcs"+(o.whIn?" | in "+esc(o.whIn):"")+'</div>'+'<button class="btn s o" data-act="prt" data-c="jobcard" data-id="'+esc(o.id)+'">Print job card</button> '+(can("rates")?'<button class="btn s o" data-act="cost" data-id="'+esc(o.design)+'" data-c="'+esc(o.jobCard)+'">Cost</button>':"")+'<div class="top"><span class="'+(t.status==="Delivered"?"ok":"")+'">'+esc(t.status)+"</span></div></div>"}).join(""):'<div class="card sm">No orders yet. Add the first order with + New order.</div>';
+return h}
+function tform(o){if(!o)return;if(!can("add"))return toast("No permission");const ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>'+esc(o.design)+" | JC "+esc(o.jobCard)+'</h2><button class="btn s o" id="tx">Close</button></div><div class="card"><div class="g"><div><label>Order qty</label><input id="t_q" type="number" value="'+esc(o.qty||"")+'"></div><div><label>Delivery date</label><input id="t_d" type="date" value="'+esc(o.deliveryDate||"")+'"></div><div><label>Packing start</label><input id="t_ps" type="date" value="'+esc(o.packStart||"")+'"></div><div><label>Packing end</label><input id="t_pe" type="date" value="'+esc(o.packEnd||"")+'"></div><div class="w"><label>Order type</label><input id="t_ot" readonly data-opt="orderType" value="'+esc(o.orderType||"")+'"></div><div class="w"><label>Colours (choose 4-8)</label><input id="t_co" readonly data-opt="colour" data-multi="1" value="'+esc(o.colours||"")+'"></div><div class="w"><label>Accessories</label><input id="t_ac" value="'+esc(o.accessories||"")+'"></div><div class="w"><b>Size cut</b></div><div><label>Vendor</label><input id="t_sv" value="'+esc(o.scVendor||"")+'"></div><div><label>PO no and date</label><input id="t_sp" value="'+esc(o.scPo||"")+'"></div><div><label>Issue date</label><input id="t_sd" type="date" value="'+esc(o.scDate||"")+'"></div><div><label>Person</label><input id="t_sb" value="'+esc(o.scBy||"")+'"></div><div class="w"><b>Cutting</b></div><div><label>Issue date</label><input id="t_cd" type="date" value="'+esc(o.cutDate||"")+'"></div><div><label>Person</label><input id="t_cb" value="'+esc(o.cutBy||"")+'"></div><div class="w"><label>Qty cut (pcs)</label><input id="t_cq" type="number" value="'+esc(o.cutQty||"")+'"></div><div class="w"><label>Warehouse in date</label><input id="t_w" type="date" value="'+esc(o.whIn||"")+'"></div><div class="w"><label>Status (leave blank for automatic)</label><input id="t_s" value="'+esc(o.status||"")+'"></div><div class="w"><label>Remarks</label><input id="t_r" value="'+esc(o.remarks||"")+'"></div></div><button class="btn" id="ts">Save</button>'+(can("del")?'<button class="btn r" id="td">Delete order</button>':"")+"</div>";document.body.appendChild(ov);
+$("tx").onclick=()=>ov.remove();$("ts").onclick=()=>{const v=i=>$(i).value.trim();ok(jc("orders").doc(o.id).set({qty:+v("t_q")||o.qty,deliveryDate:v("t_d"),packStart:v("t_ps"),packEnd:v("t_pe"),whIn:v("t_w"),status:v("t_s"),remarks:v("t_r"),orderType:v("t_ot"),colours:v("t_co"),accessories:v("t_ac"),scVendor:v("t_sv"),scPo:v("t_sp"),scDate:v("t_sd"),scBy:v("t_sb"),cutDate:v("t_cd"),cutBy:v("t_cb"),cutQty:+v("t_cq")||""},{merge:true}));ov.remove()};
+if($("td"))$("td").onclick=()=>{if(confirm("Delete this order?")){jc("orders").doc(o.id).delete();ov.remove()}}}
+function fabLots(n){const a=D.inward.filter(x=>x.fabNo===n&&iu(x)==="Mtr"&&num(x.rate)>0).map(x=>({v:x.vendor||"",q:iq(x),r:num(x.rate),d:x.date||""}));D.opening.filter(o=>o.type==="fab"&&o.key===n&&num(o.rate)>0).forEach(o=>a.push({v:"Opening stock",q:num(o.qty),r:num(o.rate),d:o.date||""}));return a.sort((x,y)=>String(x.d).localeCompare(String(y.d)))}
+const wavg=a=>{const q=a.reduce((t,x)=>t+x.q,0);return q?a.reduce((t,x)=>t+x.q*x.r,0)/q:0};
+const fabRate=(n,basis)=>{if(!n)return 0;const a=fabLots(n);if(a.length)return basis==="last"?a[a.length-1].r:wavg(a);const f=D.fabrics.find(x=>x.fabNo===n);return f?num(f.rate):0};
+const r2=n=>Math.round(n*100)/100;
+const fabNote=f=>{const a=f?fabLots(f):[];return a.length?a.map(l=>esc(l.v||"")+" "+l.q+" m @ Rs "+l.r).join("; ")+" | Weighted avg Rs "+r2(wavg(a))+" | Latest Rs "+a[a.length-1].r:""};
+const jobNote=j=>j.lots.map(l=>esc(l.k)+(D.orders.some(o=>o.kind==="sample"&&o.jobCard===l.jc)?" (sample)":"")+" "+l.q+" pcs @ Rs "+l.r).join("; ")+" | Weighted avg Rs "+r2(j.avg)+" | Latest Rs "+j.last+(j.low?" | Lowest Rs "+j.low.r+" ("+esc(j.low.k)+")":"");
+let CM={};
+function costBase(des,jc,bo){const L=D.issues.filter(x=>x.design===des&&(!jc||x.jobCard===jc)),b=L.slice().sort((a,c)=>String(c.at||"").localeCompare(String(a.at||"")))[0]||{},cs=D.costs.find(x=>x.id===sid(des))||{},o=D.orders.find(x=>x.design===des&&(!jc||x.jobCard===jc))||D.orders.find(x=>x.design===des)||{};const bs=bo||cs.basis||"avg";
+const fb=(k,fab,mtr)=>{const f=cs[k+"Fab"]!=null?cs[k+"Fab"]:fab,m=cs[k+"Mtr"]!=null?num(cs[k+"Mtr"]):num(mtr),man=cs[k+"Rate"]!=null&&cs[k+"Rate"]!=="";return{k,f:f||"",m,man,r:man?num(cs[k+"Rate"]):fabRate(f,bs)}};
+const G={};L.forEach(x=>{const k=x.proc||"-",g=G[k]=G[k]||{p:k,ks:[],q:0,v:0,lots:[]};if(x.karigar&&!g.ks.includes(x.karigar))g.ks.push(x.karigar);g.q+=num(x.qty);g.v+=num(x.qty)*num(x.rate);g.lots.push({k:x.karigar||"",q:num(x.qty),r:num(x.rate),d:x.date||"",jc:x.jobCard||""})});
+return{cs,basis:bs,qty:num(o.qty)||num(L[0]&&L[0].qty),rows:[fb("top",b.topFab||o.topFab,b.topMtr),fb("dup",b.dupFab||b.topFab||o.dupFab||o.topFab,b.dupMtr),fb("bot",o.botFab&&/^F\d+$/.test(o.botFab)?o.botFab:"",null)],job:Object.values(G).map(g=>{const ls=g.lots.slice().sort((a,c)=>String(a.d).localeCompare(String(c.d))),av=g.q?g.v/g.q:0,la=ls.length?ls[ls.length-1].r:0,mn=ls.filter(l=>l.r>0).sort((a,c)=>a.r-c.r)[0];return{p:g.p,ks:g.ks.join(", "),lots:ls,avg:av,last:la,low:mn,r:bs==="last"?la:av}}),extras:cs.extras||[],waste:num(cs.waste),margin:cs.margin!=null?num(cs.margin):20,sp:num(cs.sp)}}
+const costSum=(rows,waste,job,ex)=>{const fab=rows.reduce((t,r)=>t+r.m*r.r,0),fw=fab*(1+waste/100),jw=job.reduce((t,r)=>t+r,0),oe=ex.reduce((t,a)=>t+a,0);return{fab,fw,jw,oe,total:fw+jw+oe}};
+function costOf(des,jc){const key=des+"|"+(jc||"");if(CM[key])return CM[key];const b=costBase(des,jc);return CM[key]=Object.assign({b},costSum(b.rows,b.waste,b.job.map(j=>j.r),b.extras.map(e=>num(e.a))))}
+const costLine=d=>{if(!can("rates"))return "";const c=costOf(d,"");return c.total>0?"<b>Cost Rs "+Math.round(c.total)+"/pc</b> (weighted avg)":""};
+let CQ="";
+function costView(){if(!can("rates"))return '<div class="card">No access.</div>';
+const ds=[...new Set(D.issues.map(x=>x.design).concat(D.orders.map(o=>o.design)).filter(Boolean))].filter(d=>!CQ||d.toLowerCase().includes(CQ.toLowerCase())).sort();
+return '<div class="card"><h2>Costing (weighted average, per piece)</h2><div class="sm">Fabric + job work + other cost = total cost per piece. Tap a design to see and edit the full calculation.</div><input id="cq" placeholder="Search design" value="'+esc(CQ)+'" style="margin-top:8px"><button class="btn" data-act="cnew">Calculate for any design</button></div>'+
+(ds.map(d=>{const c=costOf(d,"");return '<div class="it '+cc(d)+'" data-act="cost" data-id="'+esc(d)+'" data-c=""><div class="top"><span>'+esc(d)+"</span><span>Rs "+Math.round(c.total)+' / pc</span></div><div class="sm">Fabric '+Math.round(c.fw)+" | Job work "+Math.round(c.jw)+" | Other "+Math.round(c.oe)+"</div></div>"}).join("")||'<div class="card sm">No designs yet.</div>')}
+addEventListener("input",e=>{if(e.target.id==="cq"){CQ=e.target.value;const p=e.target.selectionStart;lists();const n=$("cq");n.focus();n.setSelectionRange(p,p)}});
+function cform(des,jc,bo){if(!can("rates"))return toast("No permission");if(!des)return;const b=costBase(des,jc,bo),ov=document.createElement("div");ov.className="ov";const LB={top:"Top",dup:"Dupatta",bot:"Bottom"};
+ov.innerHTML='<div class="bar"><h2>Costing | '+esc(des)+'</h2><button class="btn s o" id="cx">Close</button></div>'+
+'<div class="card"><label>Costing basis</label><select id="c_b"><option value="avg"'+(b.basis==="avg"?" selected":"")+'>Weighted average of all lots</option><option value="last"'+(b.basis==="last"?" selected":"")+'>Latest rate only</option></select></div><div class="card"><h2>Fabric (per piece)</h2>'+b.rows.map(r=>'<div class="g"><div class="w"><label>'+LB[r.k]+' fabric (F no)</label><input id="cf_'+r.k+'" value="'+esc(r.f)+'"></div><div><label>Meters</label><input id="cm_'+r.k+'" type="number" step="0.01" inputmode="decimal" value="'+(r.m||"")+'"></div><div><label>Rate Rs/mtr</label><input id="cr_'+r.k+'" type="number" step="0.01" inputmode="decimal" data-m="'+(r.man?1:0)+'" value="'+(r.r||"")+'"></div></div><div class="sm" id="cl_'+r.k+'">'+fabNote(r.f)+'</div>').join("")+'<label>Wastage / shrinkage %</label><input id="c_w" type="number" step="0.1" inputmode="decimal" value="'+(b.waste||"")+'"></div>'+
+'<div class="card"><h2>Job work (per piece)</h2>'+(b.job.map((j,i)=>'<div class="g"><div class="w sm">'+esc(j.p)+" | "+esc(j.ks)+'</div><div class="w"><label>Rate Rs/pc</label><input class="cj" type="number" step="0.01" inputmode="decimal" value="'+(+j.r.toFixed(2))+'"></div></div><div class="sm">'+jobNote(j)+'</div>').join("")||'<div class="sm">No job work issued for this design yet. Add it under Other cost.</div>')+'</div>'+
+'<div class="card"><h2>Other cost (per piece)</h2><div id="cex"></div><button class="btn o" id="cadd">+ Add cost (lace, packing, courier...)</button></div>'+
+'<div class="card"><div class="g"><div><label>Profit % on cost</label><input id="c_m" type="number" step="0.1" inputmode="decimal" value="'+b.margin+'"></div><div><label>Selling price Rs/pc (optional)</label><input id="c_s" type="number" step="0.01" inputmode="decimal" value="'+(b.sp||"")+'"></div></div><div class="note" id="cres"></div><button class="btn" id="csv">Save costing</button><button class="btn o" id="cpr">Print costing</button></div>';document.body.appendChild(ov);
+const addEx=(n,a)=>{const d=document.createElement("div");d.className="g";d.innerHTML='<div><input class="exn" placeholder="Name" value="'+esc(n||"")+'"></div><div><input class="exa" type="number" step="0.01" inputmode="decimal" placeholder="Rs/pc" value="'+(a||"")+'"></div>';$("cex").appendChild(d)};
+(b.extras.length?b.extras:[{n:"Packing"},{n:"Courier / freight"},{n:"Overhead"}]).forEach(e=>addEx(e.n,e.a));$("cadd").onclick=()=>addEx("","");
+const val=i=>+($(i)&&$(i).value)||0,read=()=>({rows:["top","dup","bot"].map(k=>({m:val("cm_"+k),r:val("cr_"+k)})),job:[...ov.querySelectorAll(".cj")].map(e=>+e.value||0),ex:[...ov.querySelectorAll(".exa")].map(e=>+e.value||0)});
+const calc=()=>{const x=read(),c=costSum(x.rows,val("c_w"),x.job,x.ex),m=val("c_m"),sp=val("c_s"),R=n=>Math.round(n*100)/100;
+$("cres").innerHTML="Fabric (with wastage): <b>Rs "+R(c.fw)+"</b><br>Job work: <b>Rs "+R(c.jw)+"</b><br>Other cost: <b>Rs "+R(c.oe)+"</b><br><span style=\"font-size:19px\">TOTAL COST per piece: <b>Rs "+R(c.total)+"</b></span><br>Lot ("+b.qty+" pcs): Rs "+Math.round(c.total*b.qty)+"<br>Suggested price at "+m+"% profit: <b>Rs "+R(c.total*(1+m/100))+"</b>"+(sp?"<br>At selling price Rs "+sp+": profit Rs "+R(sp-c.total)+" ("+(c.total?R((sp-c.total)/c.total*100):0)+"% on cost)":"");return c};
+["top","dup","bot"].forEach(k=>{$("cf_"+k).oninput=()=>{const v=$("cf_"+k).value.replace(/\s/g,"").toUpperCase(),r=fabRate(v,b.basis);if(r&&$("cr_"+k).dataset.m!=="1")$("cr_"+k).value=r2(r);$("cl_"+k).textContent=fabNote(v);calc()};$("cr_"+k).addEventListener("input",()=>{$("cr_"+k).dataset.m="1"})});
+ov.addEventListener("input",calc);calc();$("c_b").onchange=()=>{const v=$("c_b").value;ov.remove();cform(des,jc,v)};$("cx").onclick=()=>ov.remove();
+$("csv").onclick=()=>{const d={design:des,basis:$("c_b").value,waste:val("c_w"),margin:val("c_m"),sp:val("c_s"),extras:[...ov.querySelectorAll("#cex .g")].map(g=>({n:g.querySelector(".exn").value.trim(),a:+g.querySelector(".exa").value||0})).filter(e=>e.n||e.a)};
+["top","dup","bot"].forEach(k=>{d[k+"Fab"]=$("cf_"+k).value.replace(/\s/g,"").toUpperCase();d[k+"Mtr"]=val("cm_"+k);if($("cr_"+k).dataset.m==="1")d[k+"Rate"]=val("cr_"+k)});
+ok(jc("costs").doc(sid(des)).set(d));ov.remove()};
+$("cpr").onclick=()=>{const x=read(),c=calc(),R=n=>(Math.round(n*100)/100).toFixed(2),ex=[...ov.querySelectorAll("#cex .g")].map(g=>[g.querySelector(".exn").value,+g.querySelector(".exa").value||0]).filter(e=>e[1]);
+const fr=["top","dup","bot"].map((k,i)=>[LB[k],$("cf_"+k).value,x.rows[i].m,x.rows[i].r,R(x.rows[i].m*x.rows[i].r)]).filter(r=>r[2]);
+printDoc("COSTING SHEET - "+des,"<b>Fabric (per piece)</b>"+TB(["Part","Fabric","Mtr","Rate","Amount"],fr)+"<div>Wastage "+val("c_w")+"%  | Fabric cost with wastage Rs "+R(c.fw)+"</div><b>Job work (per piece)</b>"+TB(["Process","Karigar","Rate"],b.job.map((j,i)=>[j.p,j.ks,R(x.job[i]||0)]))+(ex.length?"<b>Other cost</b>"+TB(["Item","Rs/pc"],ex.map(e=>[e[0],R(e[1])])):"")+KV([["Fabric cost/pc",R(c.fw)],["Job work/pc",R(c.jw)],["Other cost/pc",R(c.oe)],["TOTAL COST per piece",R(c.total)],["Lot qty",b.qty],["Lot cost",Math.round(c.total*b.qty)],["Suggested price @ "+val("c_m")+"% profit",R(c.total*(1+val("c_m")/100))]]))}}
+const fmap=()=>{const m={};D.fabrics.forEach(f=>m[f.fabNo]=f);return m};
+const issOf=id=>D.issues.find(i=>i.id===id);
+const readyOf=n=>{let r=0,d=0;D.receipts.forEach(x=>{const l=issOf(x.line);if(l&&l.design===n&&x.ready!==false)r+=num(x.qty)});D.deliveries.forEach(x=>{if(x.design===n)d+=num(x.qty)});D.opening.forEach(o=>{if(o.type==="des"&&o.key===n)r+=num(o.qty)});D.alters.forEach(x=>{if(x.design===n&&x.fromStock!==false)r-=altPend(x)});return r-d};
+function stockFab(){const fm=fmap(),FS={},ent=n=>FS[n]=FS[n]||{in:0,used:0,u:(fm[n]&&fm[n].unit)||"Mtr"};
+D.inward.forEach(x=>{if(!x.fabNo)return;const e=ent(x.fabNo);e.u=iu(x);e.in+=iq(x)});
+D.opening.filter(o=>o.type==="fab").forEach(o=>{const e=ent(o.key);if(o.unit)e.u=o.unit;e.in+=num(o.qty)});
+D.issues.forEach(x=>{const q=num(x.qty);[[x.topFab,num(x.topMtr)],[x.dupFab||x.topFab,num(x.dupMtr)]].forEach((p,i)=>{if(!p[0])return;const e=ent(p[0]);if(e.u==="Pcs"){if(i===0||p[0]!==x.topFab)e.used+=q}else e.used+=p[1]*q})});
+return Object.keys(FS).sort((a,b)=>a.localeCompare(b,0,{numeric:true})).map(n=>({n,ph:(fm[n]||{}).ph,name:(fm[n]||{}).name||"",u:FS[n].u,in:FS[n].in,used:FS[n].used,bal:FS[n].in-FS[n].used}))}
+function arform(id){const x=D.alters.find(y=>y.id===id);if(!x)return;const p=altPend(x),ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>Receive back | '+esc(x.design)+'</h2><button class="btn s o" id="ax">Close</button></div><div class="card"><div class="sm">'+esc(x.altType||"")+" | "+esc(x.karigar||"")+" | pending "+p+' pcs</div><label>Date</label><input id="ad" type="date" value="'+today()+'"><label>Qty received back</label><input id="aq" type="number" inputmode="numeric" value="'+p+'"><label>Remarks</label><input id="ar"><button class="btn" id="as">Save</button></div>';document.body.appendChild(ov);
+$("ax").onclick=()=>ov.remove();$("as").onclick=()=>{const q=+$("aq").value;if(!(q>0))return toast("Enter quantity");if(q>p)return toast("Only "+p+" pcs pending");ok(jc("alters").doc(id).set({returns:(x.returns||[]).concat([{d:$("ad").value,q,r:$("ar").value.trim()}])},{merge:true}));ov.remove()}}
+function stockDes(){const DS={},dd=n=>DS[n]=DS[n]||{iss:0,rec:0,ready:0,del:0};
+D.issues.forEach(x=>{if(x.design)dd(x.design).iss+=num(x.qty)});
+D.receipts.forEach(r=>{const l=issOf(r.line);if(!l||!l.design)return;const e=dd(l.design);e.rec+=num(r.qty);if(r.ready!==false)e.ready+=num(r.qty)});
+D.deliveries.forEach(x=>{if(x.design)dd(x.design).del+=num(x.qty)});
+D.opening.filter(o=>o.type==="des").forEach(o=>{const e=dd(o.key);e.ready+=num(o.qty);e.op=(e.op||0)+num(o.qty)});
+D.alters.forEach(x=>{if(!x.design)return;const e=dd(x.design),pp=altPend(x);e.altp=(e.altp||0)+pp;if(x.fromStock!==false)e.ready-=pp});
+return Object.keys(DS).map(n=>({n,alt:DS[n].altp||0,op:DS[n].op||0,ph:(D.designs.find(d=>d.design===n)||{}).ph,iss:DS[n].iss,rec:DS[n].rec,wip:DS[n].iss-DS[n].rec,del:DS[n].del,stock:DS[n].ready-DS[n].del})).sort((a,b)=>(b.stock>0)-(a.stock>0)||(b.wip>0)-(a.wip>0)||a.n.localeCompare(b.n,0,{numeric:true}))}
+const cc=t=>"c"+(String(t).split("").reduce((a,c)=>a+c.charCodeAt(0),0)%4);
+function stockView(){const q=SQ.toLowerCase();
+let h='<div class="seg" style="margin-top:8px">'+[["des","Design stock"],["fab","Fabric (F no)"],["proc","By process"]].map(x=>'<button class="'+(x[0]===SK?"on":"")+'" data-act="sk" data-v="'+x[0]+'">'+x[1]+"</button>").join("")+"</div><button class=\"btn o\" data-act=\"prt\" data-c=\"stock\" data-id=\"\">Print this list</button>";
+if(SK==="des"){const a=stockDes();let w=0,st=0,dl=0;a.forEach(x=>{w+=Math.max(x.wip,0);st+=x.stock;dl+=x.del});
+h+='<div class="stats" style="margin-top:10px"><div><b>'+w+'</b><span>With karigars</span></div><div><b class="'+(st<0?"bad":"ok")+'">'+st+'</b><span>Ready in house</span></div><div><b>'+dl+'</b><span>Delivered</span></div></div><div class="card"><input id="sq" placeholder="Search design no" value="'+esc(SQ)+'"></div>';
+const r=a.filter(x=>!q||x.n.toLowerCase().includes(q)).slice(0,120);
+h+=r.length?r.map(x=>'<div class="it '+cc(x.n)+'">'+(x.ph?'<img class="ph" style="float:right;margin:0 0 0 8px" src="'+x.ph+'" alt="">':"")+'<div class="top"><span>'+esc(x.n)+'</span><span class="'+(x.stock>0?"ok":x.stock<0?"bad":"")+'">Stock '+x.stock+'</span></div><div class="sm">Issued '+x.iss+" | Received "+x.rec+" | With karigars "+x.wip+" | Delivered "+x.del+(x.op?" | Opening "+x.op:"")+(x.alt?" | In alteration "+x.alt:"")+"</div>"+(can("rates")&&costLine(x.n)?'<div class="sm">'+costLine(x.n)+"</div>":"")+"</div>").join(""):'<div class="card sm">No designs yet.</div>'}
+else if(SK==="fab"){const a=stockFab().filter(x=>!q||(x.n+" "+x.name).toLowerCase().includes(q));
+h+='<div class="card" style="margin-top:10px"><input id="sq" placeholder="Search F no or fabric name" value="'+esc(SQ)+'"></div>';
+h+=a.length?a.slice(0,150).map(x=>'<div class="it '+cc(x.n)+'">'+(x.ph?'<img class="ph" style="float:right;margin:0 0 0 8px" src="'+x.ph+'" alt="">':"")+'<div class="top"><span>'+esc(x.n)+" "+esc(x.name)+'</span><span class="'+(x.bal<0?"bad":"ok")+'">'+x.bal.toFixed(x.u==="Pcs"?0:2)+" "+x.u+'</span></div><div class="sm">Inward '+x.in.toFixed(x.u==="Pcs"?0:2)+" | Issued "+x.used.toFixed(x.u==="Pcs"?0:2)+" "+x.u+"</div></div>").join(""):'<div class="card sm">No fabric inward yet.</div>'}
+else{const P={};D.issues.forEach(x=>{const k=x.proc||"-",e=P[k]=P[k]||{i:0,r:0,ks:{}};e.i+=num(x.qty);const r=D.receipts.filter(y=>y.line===x.id).reduce((a,y)=>a+num(y.qty),0);e.r+=r;const pd=num(x.qty)-r;if(pd>0){const kk=x.karigar||"-";e.ks[kk]=(e.ks[kk]||0)+pd}});
+h+=Object.keys(P).map(k=>{const e=P[k];return '<div class="it '+cc(k)+'"><div class="top"><span>'+esc(k)+'</span><span class="'+(e.i-e.r>0?"bad":"ok")+'">Pending '+(e.i-e.r)+'</span></div><div class="sm">Issued '+e.i+" | Received "+e.r+"</div>"+Object.keys(e.ks).map(n=>'<div class="sm">'+esc(n)+": "+e.ks[n]+" pcs</div>").join("")+"</div>"}).join("")||'<div class="card sm">No issues yet.</div>'}
+return h}
+function moreView(){let h='<div class="card"><h2>Account</h2><div class="sm">'+esc(ME.name)+" | "+esc(ME.phone||"")+" | "+ME.role+'</div><button class="btn r" data-act="logout">Logout</button></div>';
+if(can("export"))h+='<div class="card"><h2>Excel / ERP</h2><p class="sm">Downloads your register format: Issue Register, Receipts, Fabric Inward and all masters.</p><button class="btn" data-act="export">Download Excel</button></div>';
+if(ME.role==="super"){h+='<div class="card"><h2>Setup data</h2><button class="btn o" data-act="seed">Load starter masters (vendors, karigars, F-fabrics, designs)</button><div class="sm" id="sst"></div><label>Import old register (.xlsx)</label><input id="imf" type="file" accept=".xlsx"><button class="btn o" data-act="import">Import issues and receipts</button></div>';
+h+='<div class="card"><h2>Settings</h2><div class="g"><div><label>Std deduction %</label><input id="st_s" type="number" step="0.01" value="'+SET().std+'"></div><div><label>TDS %</label><input id="st_t" type="number" step="0.01" value="'+SET().tds+'"></div></div><label>Overdue after (days, when no due date)</label><input id="st_o" type="number" value="'+SET().od+'"><p class="sm">AI photo reading runs on the GFive server (no key needed here).</p><button class="btn" data-act="setsave">Save settings</button></div>';
+h+='<div class="card"><h2>Users and rights</h2>'+D.users.map(u=>'<div class="row" data-act="uedit" data-id="'+esc(u.id)+'"><b>'+esc(u.name)+'</b> <span class="chip">'+esc(u.role)+'</span><div class="sm">'+esc(u.mobile||u.id)+" | "+PERMS.filter(r=>(u.perms||{})[r[0]]||u.role==="super").map(r=>r[0]).join(", ")+"</div></div>").join("")+'<button class="btn" data-act="uadd">+ Add user</button><button class="btn o" data-act="udef">Load default users</button></div>'}
+if(can("masters"))h+='<div class="card"><h2>Opening stock</h2><div class="sm">Stock you already had before starting this app.</div>'+D.opening.map(o=>'<div class="row"><b>'+esc(o.key)+"</b> "+num(o.qty)+" "+esc(o.unit||"")+(o.rate?" @ Rs "+o.rate:"")+' <span class="sm">'+esc(o.type==="fab"?"fabric":"design")+" | "+esc(o.date||"")+'</span> <button class="lk" style="color:var(--bad)" data-act="odel" data-id="'+esc(o.id)+'">Delete</button></div>').join("")+'<button class="btn" data-act="oadd">+ Add opening stock</button></div>';
+return h}
+function uform(u){const e=!!u,p=e?(u.perms||{}):PRESET.staff,ov=document.createElement("div");ov.className="ov";
+ov.innerHTML='<div class="bar"><h2>'+(e?"Edit user":"Add user")+'</h2><button class="btn s o" id="ux">Close</button></div><div class="card"><label>Name</label><input id="un" value="'+esc(e?u.name:"")+'"><label>Mobile (10 digits)</label><input id="um" type="tel" maxlength="10" value="'+esc(e?u.mobile:"")+'"'+(e?" readonly":"")+'><label>Role</label><select id="ur">'+[["super","Super admin"],["admin","Admin (production)"],["sub","Sub admin"],["staff","Staff (entry)"]].map(r=>'<option value="'+r[0]+'"'+((e?u.role:"staff")===r[0]?" selected":"")+">"+r[1]+"</option>").join("")+'</select><label>Rights (tick)</label>'+PERMS.map(r=>'<label style="display:flex;gap:8px;align-items:center;margin:6px 0;color:var(--ink);font-size:14px"><input type="checkbox" class="pk" data-p="'+r[0]+'" style="width:auto"'+(p[r[0]]?" checked":"")+"> "+r[1]+"</label>").join("")+'<button class="btn" id="us">Save user</button>'+(e?'<button class="btn r" id="ud">Remove user</button>':"")+"</div>";document.body.appendChild(ov);
+$("ux").onclick=()=>ov.remove();
+$("ur").onchange=()=>{const pr=PRESET[$("ur").value]||{};document.querySelectorAll(".pk").forEach(c=>c.checked=!!pr[c.dataset.p])};
+$("us").onclick=()=>{const n=$("un").value.trim(),m=$("um").value.trim();if(!n||!/^\d{10}$/.test(m))return toast("Enter name and 10-digit mobile");const perms={},role=$("ur").value;document.querySelectorAll(".pk").forEach(c=>{if(c.checked)perms[c.dataset.p]=true});if(role==="super")PERMS.forEach(r=>perms[r[0]]=true);
+ok(jc("users").doc("+91"+m).set({name:n,mobile:m,role,perms}));ov.remove()};
+if($("ud"))$("ud").onclick=()=>{if(confirm("Remove this user? They cannot login any more.")){jc("users").doc(u.id).delete();ov.remove()}}}
+
+/* ---------- actions ---------- */
+/* ---------- v13: brands, colour codes, option dropdowns, colour rows, name matching ---------- */
+let ROWS=[];
+const BRANDS={SD:"SUDH",RZ:"ROZANA",GF:"GFIVE",MH:"MAHARANI",TY:"TYOHAAR"};
+const brandOf=d=>{const m=/^[A-Z]+/.exec(String(d||"").toUpperCase());if(!m)return "";const k=Object.keys(BRANDS).find(b=>m[0].startsWith(b));return k?BRANDS[k]:""};
+const splitC=v=>String(v||"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);
+const uniq=a=>[...new Set(a.filter(x=>x!=null&&String(x).trim()!=="").map(x=>String(x).trim()))];
+const COLOUR_CODES=(()=>{const a=[];[["P",100],["D",50],["M",50]].forEach(([p,n])=>{for(let i=1;i<=n;i++)a.push(p+i)});return a})();
+function optList(key){
+if(key==="brand")return uniq([...Object.values(BRANDS),...D.orders.map(o=>String(o.brand||"").toUpperCase())]);
+if(key==="colour")return uniq([...COLOUR_CODES,...D.orders.flatMap(o=>splitC(o.colours)),...D.issues.map(x=>String(x.colour||"").toUpperCase())]);
+if(key==="orderType")return uniq(["Regular","Expo-Order","Repeat","Urgent",...D.orders.map(o=>o.orderType)]);
+if(key==="party")return uniq([...D.orders.map(o=>o.party),...D.deliveries.map(d=>d.party)]).sort();
+return []}
+/* the job card / design on the open form or overlay -> its colours */
+function ctxOrder(){const g=i=>($("f_"+i)||{}).value||"";const j=g("jobCard"),d=g("design").replace(/[\s-]/g,"").toUpperCase();
+return D.orders.find(o=>j&&o.jobCard===j)||D.orders.filter(o=>d&&o.design===d).sort((a,b)=>String(b.orderDate||"").localeCompare(String(a.orderDate||"")))[0]||null}
+function optPick(inp){const key=inp.dataset.opt,multi=inp.dataset.multi==="1",col=key==="colour";let sel=multi?splitC(inp.value):[];
+const all=optList(key),ctx=col?splitC((ctxOrder()||{}).colours):[];
+const ov=document.createElement("div");ov.className="ov";const lab={brand:"brand",colour:multi?"colours":"colour",orderType:"order type",party:"party"}[key]||key;
+ov.innerHTML='<div style="position:sticky;top:0;background:var(--bg);z-index:2;padding-bottom:6px"><div class="bar"><h2>Choose '+lab+'</h2><span>'+(multi?'<button class="btn s" id="ok2">Done</button> ':"")+'<button class="btn s o" id="ox">Close</button></span></div><input id="os" placeholder="Search or type new" style="margin:8px 0 0">'+(multi?'<div class="sm" id="osel" style="margin-top:4px"></div>':"")+'</div><div id="ol"></div>';
+document.body.appendChild(ov);
+const done=v=>{inp.value=v;if(key==="brand")inp.dataset.auto="0";inp.dispatchEvent(new Event("input",{bubbles:true}));ov.remove();if(inp.id)afterPick(inp.id.replace(/^f_/,""))};
+const render=()=>{const q=$("os").value.trim().toUpperCase(),hit=x=>!q||x.toUpperCase().includes(q);
+let h="";if(q&&!all.some(x=>x.toUpperCase()===q))h+='<div class="row" data-v="'+esc($("os").value.trim())+'"><b>Use typed: '+esc($("os").value.trim())+"</b></div>";
+if(col){const chip=c=>'<button type="button" class="chip" data-v="'+esc(c)+'" style="margin:3px;padding:7px 12px;font-size:16px;'+(sel.includes(c)?"background:var(--ac);color:var(--on);border-color:var(--ac)":"")+'">'+esc(c)+"</button>";
+const top=ctx.filter(hit);if(top.length)h+='<div class="sm" style="margin-top:6px"><b>This design</b></div>'+top.map(chip).join("");
+[["P","P1 to P100"],["D","D1 to D50"],["M","M1 to M50"]].forEach(([p,t])=>{const a=all.filter(c=>c.startsWith(p)&&/^[A-Z]\d+$/.test(c)&&hit(c));if(a.length)h+='<div class="sm" style="margin-top:8px"><b>'+t+"</b></div>"+a.map(chip).join("")});
+const other=all.filter(c=>!/^[PDM]\d+$/.test(c)&&hit(c));if(other.length)h+='<div class="sm" style="margin-top:8px"><b>Other</b></div>'+other.map(chip).join("")}
+else h+=all.filter(hit).map(x=>'<div class="row" data-v="'+esc(x)+'"><b>'+esc(x)+"</b></div>").join("")||(q?"":'<div class="sm">Nothing yet. Type above to add.</div>');
+$("ol").innerHTML=h;if(multi)$("osel").textContent=sel.length?"Selected ("+sel.length+"): "+sel.join(", "):"Tap colours to select. Usually 4 to 8."};
+render();$("os").oninput=render;$("ox").onclick=()=>ov.remove();if(multi)$("ok2").onclick=()=>done(sel.join(", "));
+$("ol").onclick=e=>{const r=e.target.closest("[data-v]");if(!r)return;const v=col?String(r.dataset.v).toUpperCase():r.dataset.v;if(!multi)return done(v);
+sel=sel.includes(v)?sel.filter(x=>x!==v):sel.concat([v]);$("os").value="";render()}}
+/* one issue challan, many colours of the same design */
+function rowHtml(r){r=r||{};return '<div class="rw" style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:6px"><input class="rc" readonly placeholder="Colour" aria-label="Colour" data-opt="colour" value="'+esc(r.colour||"")+'"><input class="rq" type="number" inputmode="numeric" placeholder="Pcs" aria-label="Pieces" value="'+esc(r.qty||"")+'"><button type="button" class="btn s o" data-act="rdel" aria-label="Remove line">X</button></div>'}
+function rowsHtml(v){const rows=Array.isArray(v)&&v.length?v:KEEP.colour||KEEP.qty?[{colour:KEEP.colour,qty:KEEP.qty}]:[{}];
+return '<div class="w"><label>Colours and pieces (one line per colour, same design)</label><div id="f_rows">'+rows.map(rowHtml).join("")+'</div><div class="g"><div><button type="button" class="btn o s" style="width:100%;margin:4px 0" data-act="radd">+ Add colour</button></div><div><button type="button" class="btn o s" style="width:100%;margin:4px 0" data-act="rjc">Colours from job card</button></div></div><div class="sm" id="f_rsum"></div></div>'}
+function getRows(){return [...document.querySelectorAll("#f_rows .rw")].map(d=>({colour:d.querySelector(".rc").value.trim().toUpperCase(),qty:+d.querySelector(".rq").value||0}))}
+function rowsQty(){return getRows().reduce((t,r)=>t+r.qty,0)}
+function setRows(a){const b=$("f_rows");if(!b)return;b.innerHTML=(a&&a.length?a:[{}]).map(rowHtml).join("");rowsSum()}
+function rowsSum(){const s=$("f_rsum");if(!s)return;const R=getRows().filter(r=>r.qty>0);s.textContent=R.length?"Total "+R.reduce((t,r)=>t+r.qty,0)+" pcs in "+R.length+" colour(s). Each colour is saved as one line of this challan.":"";if(typeof calcMtr==="function")calcMtr("")}
+function fillRowsFromJC(loud){const o=ctxOrder(),c=o?splitC(o.colours):[];if(!c.length){if(loud)toast(o?"No colours saved on job card "+o.jobCard:"Choose the job card or design first");return}
+const old=getRows();setRows(c.map(x=>({colour:x,qty:(old.find(r=>r.colour===x)||{}).qty||""})));if(loud)toast(c.length+" colours from job card "+o.jobCard)}
+/* group photo lines by design: first design fills this form, the rest come next */
+function groupItems(a){const G=[];a.forEach(x=>{let g=G.find(y=>(y.design||"")===(x.design||"")&&(y.jobCard||"")===(x.jobCard||""));if(!g){g=Object.assign({},x,{rows:[]});delete g.colour;delete g.qty;G.push(g)}g.rows.push({colour:x.colour||"",qty:x.qty||""})});return G}
+/* after a value is chosen in a form */
+function afterPick(k){const g=i=>$("f_"+i);
+if(k==="design"&&g("design")){const d=g("design").value.replace(/[\s-]/g,"").toUpperCase(),b=g("brand");
+if(b&&(!b.value||b.dataset.auto==="1")){const br=brandOf(d);if(br){b.value=br;b.dataset.auto="1"}}
+if(TAB==="orders"){const prev=D.orders.filter(o=>o.design===d).sort((a,b)=>String(b.orderDate||"").localeCompare(String(a.orderDate||"")))[0];
+if(prev)["topFab","dupFab","botFab","accessories","colours"].forEach(a=>{if(g(a)&&!g(a).value&&prev[a])g(a).value=prev[a]});
+else{const L=D.issues.filter(x=>x.design===d).sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")))[0];if(L){if(g("topFab")&&!g("topFab").value&&L.topFab)g("topFab").value=L.topFab;if(g("dupFab")&&!g("dupFab").value&&(L.dupFab||L.topFab))g("dupFab").value=L.dupFab||L.topFab}}}}
+if((k==="jobCard"||k==="design")&&$("f_rows")&&!getRows().some(r=>r.colour||r.qty))fillRowsFromJC(false);
+if(k==="jobCard"&&g("sample")){const o=D.orders.find(x=>x.jobCard===g("jobCard").value);if(o)g("sample").checked=o.kind==="sample"}}
+/* nearest name from a list (handwriting on challans: "Alim Mistry" -> "ALIM MISTRI (KATHA)") */
+const normN=s=>String(s||"").toUpperCase().replace(/\([^)]*\)/g," ").replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+function nearest(name,list){const n=normN(name);if(!n)return null;let best=null,bs=0;
+(list||[]).forEach(x=>{const m=normN(x);if(!m)return;let sc=m===n?1:1-lev(n,m)/Math.max(n.length,m.length);
+const tn=n.split(" "),tm=m.split(" "),ov=tn.filter(t=>t.length>2&&tm.some(u=>u===t||(u.length>3&&t.length>3&&(u.startsWith(t)||t.startsWith(u)||lev(u,t)<=1)))).length/Math.max(1,Math.min(tn.length,tm.length));
+sc=Math.max(sc,ov*0.95);if(sc>bs){bs=sc;best=x}});return bs>=0.6?best:null}
+document.addEventListener("click",e=>{const im=e.target.closest&&e.target.closest("img.ph");if(!im)return;e.stopPropagation();e.preventDefault();const ov=document.createElement("div");ov.className="ov";ov.style.zIndex=40;ov.innerHTML='<div class="bar"><button class="btn s o">Close</button></div><img src="'+im.src+'" style="width:100%;border-radius:10px;margin-top:10px" alt="">';document.body.appendChild(ov);ov.onclick=()=>ov.remove()},true);
+document.addEventListener("click",async e=>{const p=e.target.closest("[data-pick]");if(p){pickInto(p);return}const q0=e.target.closest("[data-opt]");if(q0){optPick(q0);return}
+const a=e.target.closest("[data-act]");if(!a)return;const act=a.dataset.act,v=a.dataset.v;
+if(act==="tab"){TAB=v;PH=null;KEEP={};draw()}
+else if(act==="save")save(false);else if(act==="radd"){$("f_rows").insertAdjacentHTML("beforeend",rowHtml({}));rowsSum()}else if(act==="rdel"){const rw=a.closest(".rw");if(document.querySelectorAll("#f_rows .rw").length>1)rw.remove();else{rw.querySelector(".rc").value="";rw.querySelector(".rq").value=""}rowsSum()}else if(act==="rjc")fillRowsFromJC(false);else if(act==="savenext")save(true);
+else if(act==="photo"){const f=$("pf");f.onchange=()=>f.files[0]&&onPhoto(f.files[0]);f.click()}
+else if(act==="del"){if(confirm("Delete this entry?"))jc(a.dataset.c).doc(a.dataset.id).delete()}
+else if(act==="mk"){MK=v;MQ="";lists()}
+else if(act==="madd")mform(null);
+else if(act==="medit")mform(D[MK].find(x=>x.id===a.dataset.id));
+else if(act==="arecv")arform(a.dataset.id);else if(act==="newch"){KEEP={};QUEUE=[];draw()}else if(act==="sk"){SK=v;SQ="";lists()}else if(act==="cost")cform(a.dataset.id,a.dataset.c);else if(act==="cnew")picker("designs",r=>cform(r.typed?r.typed.replace(/[\s-]/g,"").toUpperCase():r.o.design,""));else if(act==="onew"){NEWKIND=a.dataset.v||"order";TAB="orders";PH=null;draw()}else if(act==="oedit")tform(D.orders.find(x=>x.id===a.dataset.id));else if(act==="tlate"){TLATE=!TLATE;lists()}else if(act==="ovd"){OVD=!OVD;lists()}else if(act==="prt")doPrint(a.dataset.c,a.dataset.id);else if(act==="lk"){LK=v;lists()}else if(act==="padd")pform();else if(act==="pdel"){if(confirm("Delete this payment?"))jc("payments").doc(a.dataset.id).delete()}else if(act==="oadd")oform();else if(act==="odel"){if(confirm("Delete?"))jc("opening").doc(a.dataset.id).delete()}else if(act==="setsave")ok(jc("settings").doc("main").set({tds:+$("st_t").value||0,std:+$("st_s").value||0,od:+$("st_o").value||15}));else if(act==="minc"){MINC=!MINC;lists()}else if(act==="zm")zoom(v==="+"?.1:-.1);else if(act==="logout")logout();
+else if(act==="export")exportX();else if(act==="import")importX();else if(act==="seed")seed();
+else if(act==="uadd")uform(null);else if(act==="uedit")uform(D.users.find(x=>x.id===a.dataset.id));else if(act==="udef")seedUsers()});
+document.addEventListener("change",e=>{if(e.target.id==="tq"){TQ=e.target.value;lists()}if(e.target.id==="sd"){SDATE=e.target.value;lists()}if(e.target.id==="qk"){QK=e.target.value;lists()}if(e.target.id==="mc"){MCAT=e.target.value;lists()}});
+let SEED=null;   // starter masters: the super admin chooses seed.json (kept off the website and the code)
+const pickJson=()=>new Promise(res=>{const i=document.createElement("input");i.type="file";i.accept=".json,application/json";i.onchange=()=>{const f=i.files[0];if(!f)return res(null);f.text().then(t=>{try{res(JSON.parse(t))}catch(e){toast("Not a valid seed.json");res(null)}})};i.click()});
+async function seed(){const st=$("sst"),say=t=>{if(st)st.textContent=t;toast(t)};
+try{if(!SEED){say("Choose the starter masters file (seed.json)");SEED=await pickJson();if(!SEED)return say("No file chosen")}say("Loading file...");const s=SEED;let b=fs.batch(),n=0,ps=[];const tot=Object.values(s).reduce((a,x)=>a+x.length,0);
+for(const k of Object.keys(s))for(const o of s[k]){b.set(jc(k).doc(String(o[MKEY[k]]).toUpperCase().replace(/[^A-Z0-9]+/g,"_")),o,{merge:true});if(++n%400===0){ps.push(b.commit());b=fs.batch()}}
+ps.push(b.commit());say("Sending "+tot+" records...");
+const t=setTimeout(()=>say("Server is not answering. Check that Firestore Database is created and Rules are published. Data is kept on this phone and will sync later."),10000);
+await Promise.all(ps);clearTimeout(t);say("Done. Loaded "+tot+" records.")}catch(x){say("Could not load: "+x.message)}}
+const xd=v=>v instanceof Date?v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0"):v;
+async function importX(){const f=$("imf").files[0];if(!f)return toast("Choose the Excel file first");const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});
+const rows=n=>{const ws=wb.Sheets[n];if(!ws)return[];const a=XLSX.utils.sheet_to_json(ws,{header:1,defval:""}),h=a.findIndex(r=>r[0]==="Line ID");if(h<0)return[];return a.slice(h+1).filter(r=>r[0]).map(r=>{const o={};a[h].forEach((c,i)=>o[c]=r[i]);return o})};
+let b=fs.batch(),n=0;const put=(c,id,o)=>{b.set(jc(c).doc(id),clean(o));if(++n%400===0){b.commit();b=fs.batch()}};
+rows("Issue Register").forEach(r=>put("issues",String(r["Line ID"]),{challan:String(r["Challan No"]),date:xd(r["Issue Date"]),topFab:String(r["Top Fabric"]||r["Fabric No"]||"").split(" / ")[0],dupFab:r["Dup Fabric"],topMtr:r["Top Mtr/Pc"],dupMtr:r["Dup Mtr/Pc"],desc:r["Description"],qty:num(r["Qty Issued (Pcs)"]),jobCard:r["PO No"],design:r["Design No (D.No)"],proc:r["Special Instruction"]||"Katha",rate:r["Katha Rate (Rs/Pc)"],remarks:r["Remarks"],karigar:"SK Abdul Kalam",at:"2000-01-01"}));
+let m=0;rows("Receipts").forEach(r=>put("receipts","X"+r["Line ID"]+"-"+(m++),{line:String(r["Line ID"]),date:xd(r["Receive Date"]),qty:num(r["Qty Received (Pcs)"]),rate:r["Katha Rate (Rs/Pc)"],remarks:r["Remarks"],at:"2000-01-01"}));
+await b.commit();toast("Imported "+n+" rows")}
+function exportX(){const I=[["Line ID","Challan No","Issue Date","Top Fabric","Dup Fabric","Description","Qty Issued (Pcs)","Job Card No","Design No (D.No)","Special Instruction","Total Received (Pcs)","Balance (Pcs)","Katha Rate (Rs/Pc)","Katha Amount (Rs)","Status","Top Mtr/Pc","Dup Mtr/Pc","Fabric Cost/Pc (Rs)","Fabric Value with Karigar (Rs)","Remarks","Karigar"]];
+D.issues.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id),0,{numeric:true})).forEach(x=>{const r=rcv(x.id),q=num(x.qty),c=fcost(x);I.push([x.id,x.challan,x.date,x.topFab,x.dupFab,x.desc,q,(x.jobCard||x.po),x.design,x.proc,r,q-r,x.rate,num(x.rate)*q,q-r<=0?"Complete":r?"Partial":"Pending",x.topMtr,x.dupMtr,c,c*Math.max(q-r,0),x.remarks,x.karigar])});
+const R=[["Line ID","Challan No","Receive Date","Design No (D.No)","Qty Received (Pcs)","Katha Rate (Rs/Pc)","Katha Amount (Rs)","Remarks"]];D.receipts.forEach(x=>{const l=D.issues.find(i=>i.id===x.line)||{},rt=x.rate!=null?num(x.rate):num(l.rate);R.push([x.line,l.challan,x.date,l.design,x.qty,rt,rt*num(x.qty),x.remarks])});
+const N=[["Received Date","Bill No","PO No","Vendor","GST No","Item / Vendor Code","Quantity","Unit","Rate","Amount","Courier","Our Fabric No","Remarks"]];D.inward.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(x=>N.push([x.date,x.bill,x.po,x.vendor,x.gstin,x.item||x.fabName,iq(x),iu(x),x.rate,iq(x)*num(x.rate),x.courier,x.fabNo,x.remarks]));
+const wb=XLSX.utils.book_new(),add=(n,a)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);add("Issue Register",I);add("Receipts",R);add("Fabric Inward",N);add("Delivery",[["Date","Delivery Challan","Party","Design No","Qty","Remarks"]].concat(D.deliveries.map(x=>[x.date,x.challan,x.party,x.design,x.qty,x.remarks])));add("Stock Design",[["Design No","Issued","Received","With Karigars","Delivered","Ready Stock"]].concat(stockDes().map(x=>[x.n,x.iss,x.rec,x.wip,x.del,x.stock])));add("Stock Fabric",[["Our Fabric No","Name","Unit","Inward","Issued","Balance"]].concat(stockFab().map(x=>[x.n,x.name,x.u,x.in,x.used,x.bal])));
+Object.keys(MF).forEach(k=>add(MT[k],[MF[k].map(f=>f[1])].concat(D[k].map(x=>MF[k].map(f=>x[f[0]])))));add("TNA",[["D.No","Job Card","Brand","Order Type","Colours","Accessories","Order Date","Top Fabric","Dupatta Fabric","Bottom Fabric","Qty","Delivery Date","Size Cut Vendor","Size Cut PO","Size Cut Date","Size Cut By","Cutting Date","Cutting By","Cut Qty","Dyeing Vendor","Dyeing Challan","Dyeing Issue","Dyeing Receive","Dyeing Days","Hand Vendor","Hand Challan","Hand Issue","Hand Receive","Hand Days","Stitching Vendor","Stitching Challan","Stitching Issue","Stitching Receive","Stitching Days","Packing Start","Packing End","Warehouse In","Delivered Qty","Current Status","Days Since Order"]].concat(D.orders.filter(o=>o.kind!=="sample").map(o=>{const t=tnaOf(o),f=n=>{const g=t.st.find(y=>y.st===n);return g?[g.ks.join(" / "),g.ch.join(", "),g.iss,g.done?g.rcv:"",g.days]:["","","","",""]};return [o.design,o.jobCard,o.brand,o.orderType,o.colours,o.accessories,o.orderDate,o.topFab,o.dupFab,o.botFab,o.qty,o.deliveryDate,o.scVendor,o.scPo,o.scDate,o.scBy,o.cutDate,o.cutBy,o.cutQty].concat(f("Dyeing"),f("Hand / Embroidery / Print"),f("Stitching & Finishing"),[o.packStart,o.packEnd,o.whIn,t.del,t.status,dd(o.orderDate,today())])})));
+add("Sample TNA",[["D.No","Job Card","Brand","Order Type","Colours","Accessories","Order Date","Top Fabric","Dupatta Fabric","Bottom Fabric","Qty","Delivery Date","Size Cut Vendor","Size Cut PO","Size Cut Date","Size Cut By","Cutting Date","Cutting By","Cut Qty","Dyeing Vendor","Dyeing Challan","Dyeing Issue","Dyeing Receive","Dyeing Days","Hand Vendor","Hand Challan","Hand Issue","Hand Receive","Hand Days","Stitching Vendor","Stitching Challan","Stitching Issue","Stitching Receive","Stitching Days","Packing Start","Packing End","Warehouse In","Delivered Qty","Current Status","Days Since Order"]].concat(D.orders.filter(o=>o.kind==="sample").map(o=>{const t=tnaOf(o),f=n=>{const g=t.st.find(y=>y.st===n);return g?[g.ks.join(" / "),g.ch.join(", "),g.iss,g.done?g.rcv:"",g.days]:["","","","",""]};return [o.design,o.jobCard,o.brand,o.orderType,o.colours,o.accessories,o.orderDate,o.topFab,o.dupFab,o.botFab,o.qty,o.deliveryDate,o.scVendor,o.scPo,o.scDate,o.scBy,o.cutDate,o.cutBy,o.cutQty].concat(f("Dyeing"),f("Hand / Embroidery / Print"),f("Stitching & Finishing"),[o.packStart,o.packEnd,o.whIn,t.del,t.status,dd(o.orderDate,today())])})));
+if(can("rates"))add("Costing",[["Design","Top Fabric","Top Mtr","Top Rate","Dup Fabric","Dup Mtr","Dup Rate","Bottom Fabric","Bottom Mtr","Bottom Rate","Wastage %","Fabric Cost/pc","Job Work/pc","Other Cost/pc","Total Cost/pc","Qty","Lot Cost","Suggested Price","Profit %"]].concat([...new Set(D.issues.map(x=>x.design).concat(D.orders.map(o=>o.design)).filter(Boolean))].sort().map(d=>{const c=costOf(d,""),b=c.b,r=b.rows;return [d,r[0].f,r[0].m,r[0].r,r[1].f,r[1].m,r[1].r,r[2].f,r[2].m,r[2].r,b.waste,Math.round(c.fw*100)/100,Math.round(c.jw*100)/100,Math.round(c.oe*100)/100,Math.round(c.total*100)/100,b.qty,Math.round(c.total*b.qty),Math.round(c.total*(1+b.margin/100)*100)/100,b.margin]})));
+add("Alterations",[["Issue Date","Challan","Design","Colour","Job Card","Work","Karigar","Qty","Rate","Returned","Pending","Due","Reason"]].concat(D.alters.map(x=>[x.date,x.challan,x.design,x.colour,x.jobCard,x.altType,x.karigar,x.qty,x.rate,altRet(x),altPend(x),x.due,x.reason])));
+add("Opening Stock",[["Type","Number","Qty","Unit","As on"]].concat(D.opening.map(o=>[o.type==="fab"?"Fabric":"Design",o.key,o.qty,o.unit,o.date])));
+if(can("ledger"))add("Payments",[["Date","Karigar","Amount","Mode","Remarks"]].concat(D.payments.map(p=>[p.date,p.karigar,p.amount,p.mode,p.remarks])));
+add("ERP Issue",[["Challan No","Challan Dt","Jobber","Category","Design","Job Card No","Top Fabric","Top Mtr","Dup Fabric","Dup Mtr","Qty (Pcs)","Total Mtr","Return By"]].concat(D.issues.map(x=>[x.id,x.date,x.karigar,x.proc,x.design,x.jobCard,x.topFab,num(x.topMtr)*num(x.qty),x.dupFab||x.topFab,num(x.dupMtr)*num(x.qty),num(x.qty),(num(x.topMtr)+num(x.dupMtr))*num(x.qty),x.due])));
+add("ERP Receipt",[["Receipt No","Challan Dt","Party Bill No","Jobber","Design","Issue Challan","Qty (Pcs)","Rate","Amount","Std Deduction","TDS","Net Amount"]].concat(D.receipts.map(r=>{const a=recAmt(r);return [r.remarks||r.id,r.date,"",a.l.karigar,a.l.design,r.line,num(r.qty),a.rt,a.g,a.sd,a.td,a.net]})));
+XLSX.writeFile(wb,"GFive_Job_Work_"+today()+".xlsx")}
+
+let Z=+localStorage.getItem("gf_z")||1.1;function zoom(d){Z=Math.min(1.8,Math.max(.9,+(Z+d).toFixed(2)));localStorage.setItem("gf_z",Z);document.body.style.zoom=Z}zoom(0);
+if("serviceWorker"in navigator)navigator.serviceWorker.register("/production/sw.js",{scope:"/production"}).catch(()=>{});
+boot();
+</script>
+</body>
+</html>

@@ -191,5 +191,50 @@ service cloud.firestore {
                         && staffRole(uid) == 'admin');
       allow delete: if isSuper();
     }
+      // ================================================================ GFive Job-Work (production) app
+    // Static app at /production, same Firebase project, collections named jw_*.
+    // Login = mobile OTP (the same account can also have the Sales e-mail login linked).
+    // Users: jw_users/<+91mobile> {name, role: super|sub|admin|staff, perms{add,del,masters,export,rates,ledger}}.
+    // IMPORTANT: put the Job Work super admin mobiles in jwBootPhones() — same as NEXT_PUBLIC_JW_BOOT_PHONES on Vercel.
+    function jwBootPhones() { return ['+91YOUR_MOBILE_1', '+91YOUR_MOBILE_2']; }
+    function jwPh() { return request.auth != null ? request.auth.token.get('phone_number', '') : ''; }
+    function jwUserPath() { return /databases/$(database)/documents/jw_users/$(jwPh()); }
+    function jwBoot() { return jwPh() != '' && jwPh() in jwBootPhones(); }
+    function jwIsUser() { return jwPh() != '' && exists(jwUserPath()); }
+    function jwMe() { return get(jwUserPath()).data; }
+    function jwIn() { return jwBoot() || jwIsUser(); }
+    function jwSup() { return jwBoot() || (jwIsUser() && jwMe().get('role', '') == 'super'); }
+    // perms may be saved as true or 1
+    function jwHas(k) { return jwSup() || (jwIsUser() && jwMe().get('perms', {}).get(k, false) in [true, 1]); }
+    function jwEntries() { return ['jw_inward', 'jw_issues', 'jw_receipts', 'jw_deliveries', 'jw_orders', 'jw_alters']; }
+
+    match /jw_users/{phone} {
+      allow read: if jwIn() || (jwPh() != '' && phone == jwPh());
+      allow write: if jwSup();
+    }
+    match /{col}/{id} {
+      // only registered Job Work users can read (not just anyone who can receive an OTP)
+      allow read: if col.matches('jw_.*') && col != 'jw_users' && jwIn()
+                  && (col != 'jw_payments' || jwHas('ledger'))
+                  && (col != 'jw_costs' || jwHas('rates'));
+      // daily entries
+      allow create: if col in jwEntries() && jwHas('add');
+      allow delete: if col in jwEntries() && jwHas('del');
+      // masters: anyone who can make entries may add a new one; edit/delete needs master rights
+      allow create: if col in ['jw_vendors', 'jw_karigars', 'jw_fabrics', 'jw_designs'] && (jwHas('add') || jwHas('masters'));
+      allow update, delete: if col in ['jw_vendors', 'jw_karigars', 'jw_fabrics', 'jw_designs', 'jw_categories', 'jw_alttypes', 'jw_colours'] && jwHas('masters');
+      allow create: if col in ['jw_categories', 'jw_alttypes', 'jw_colours'] && jwHas('masters');
+      // costing: users with the rates right
+      allow create, update, delete: if col == 'jw_costs' && jwHas('rates');
+      // orders / samples (TNA) and alterations: staff with entry right can update dates and status
+      allow update: if col in ['jw_orders', 'jw_alters'] && jwHas('add');
+      // karigar payments
+      allow create, delete: if col == 'jw_payments' && jwHas('ledger');
+      // opening stock and settings: master rights
+      allow create, update, delete: if col in ['jw_opening', 'jw_settings'] && jwHas('masters');
+      // staff can attach a photo to a design or fabric without master rights
+      allow update: if col in ['jw_designs', 'jw_fabrics'] && jwHas('add')
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ph']);
+    }
   }
 }
