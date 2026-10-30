@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { ClipboardList, Inbox, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3 } from 'lucide-react';
+import { ClipboardList, Inbox, Shirt, PlusCircle, Users, Settings, LogOut, Loader2, ShieldAlert, Crown, Sparkles, UserRound, BarChart3, LayoutGrid } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { ROLE_LABEL, type Permission } from '@/lib/permissions';
 import NamePrompt from './NamePrompt';
@@ -50,10 +50,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <ShieldAlert className="mx-auto text-red-700" size={40} />
           <h1 className="mt-3 font-display text-2xl font-semibold">No access</h1>
           <p className="mt-2 text-sm text-muted">{state.reason}</p>
-          <p className="mt-1 text-xs text-muted">Signed in as {state.user.email}</p>
-          <button className="btn btn-outline mt-5" onClick={() => signOut()}>
-            Sign out
-          </button>
+          <p className="mt-1 text-xs text-muted">Signed in as {state.user.email || state.user.phoneNumber}</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <Link href="/start" className="btn btn-primary">GFive Dashboard</Link>
+            <button className="btn btn-outline" onClick={() => signOut()}>
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -73,6 +76,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <img src="/brand/logo-round.png" width={447} height={447} alt="GFive" className="size-14 rounded-full ring-1 ring-gold-400/50" />
           <p className="mt-3 font-display text-2xl font-semibold">GFive Sales</p>
           <p className="text-xs tracking-wide text-ivory/60">Admin studio</p>
+          <Link href="/start" className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-ivory/25 px-3 py-1 text-xs text-ivory/80 hover:bg-white/5 hover:text-white">
+            <LayoutGrid size={13} /> Dashboard · Job Work
+          </Link>
         </div>
         <div className="gold-rule mx-6 opacity-50" />
         <nav className="mt-4 flex-1 space-y-1 px-3">
@@ -108,6 +114,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <span className="rounded-full bg-leaf-50 px-2 py-0.5 text-[13px] text-leaf-800">{roleLabel}</span>
         </Link>
         <div className="flex items-center gap-1">
+          <Link href="/start" className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label="GFive Dashboard (Sales / Job Work)"><LayoutGrid size={18} /></Link>
           {extra.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} className="grid size-9 place-items-center rounded-full text-leaf-800 hover:bg-leaf-50" aria-label={label}><Icon size={18} /></Link>
           ))}

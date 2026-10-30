@@ -2,24 +2,63 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2, LockKeyhole, Mail } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail, Smartphone } from 'lucide-react';
+import type { ConfirmationResult } from 'firebase/auth';
 import { useAuth, authErrorMessage } from '@/lib/auth';
+import { otpErrorMessage, sendOtp, toE164 } from '@/lib/phone-auth';
 
 export default function LoginPage() {
-  const { state, signIn, signOut, resetPassword } = useAuth();
+  const { state, signIn, resetPassword } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'error' | 'ok'; text: string } | null>(null);
+  const [mode, setMode] = useState<'email' | 'mobile'>('email');
+  const [mobile, setMobile] = useState('');
+  const [code, setCode] = useState('');
+  const [conf, setConf] = useState<ConfirmationResult | null>(null);
+  const [captcha, setCaptcha] = useState(false);
 
+  // signed in → back to the page they wanted, else the GFive Dashboard (Sales | Job Work)
   useEffect(() => {
-    if (state.status === 'ready') {
+    if (state.status === 'ready' || state.status === 'no-access') {
       const next = new URLSearchParams(window.location.search).get('next');
-      router.replace(next && next.startsWith('/admin') && next !== '/admin/login' ? next : '/admin/orders');
+      const ok = state.status === 'ready' && next && (next.startsWith('/admin') || next === '/start') && next !== '/admin/login';
+      router.replace(ok ? next : '/start');
     }
   }, [state.status, router]);
+
+  const sendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = toE164(mobile);
+    if (!p) return setMsg({ type: 'error', text: 'Please enter a valid 10-digit mobile number.' });
+    setBusy(true);
+    setMsg(null);
+    try {
+      setConf(await sendOtp(p, 'login-recaptcha', { visible: captcha }));
+      setMsg({ type: 'ok', text: `OTP sent to ${p}.` });
+    } catch (err) {
+      if ((err as { code?: string }).code === 'auth/captcha-check-failed') setCaptcha(true);
+      setMsg({ type: 'error', text: otpErrorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!conf || !/^\d{6}$/.test(code.trim())) return setMsg({ type: 'error', text: 'Enter the 6-digit OTP.' });
+    setBusy(true);
+    setMsg(null);
+    try {
+      await conf.confirm(code.trim());
+    } catch (err) {
+      setMsg({ type: 'error', text: otpErrorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,17 +108,54 @@ export default function LoginPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-wordmark.png" width={329} height={182} alt="GFive" className="mx-auto h-16 w-auto lg:hidden" />
           <h2 className="mt-6 font-display text-4xl font-semibold text-ink lg:mt-0">Welcome back</h2>
-          <p className="mt-1 text-sm text-muted">Sign in with your Admin, Sub Admin or Super Admin account.</p>
+          <p className="mt-1 text-sm text-muted">One login for GFive Sales and Job Work.</p>
 
-          {state.status === 'no-access' && (
-            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {state.reason}
-              <button className="mt-1 block font-medium underline" onClick={() => signOut()}>
-                Sign out of {state.user.email}
+          <div className="mt-6 grid grid-cols-2 gap-1 rounded-full bg-sand p-1" role="tablist" aria-label="Login with">
+            {(['email', 'mobile'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => {
+                  setMode(m);
+                  setMsg(null);
+                }}
+                className={`h-10 rounded-full text-sm font-medium ${mode === m ? 'bg-white text-ink shadow-soft' : 'text-muted'}`}
+              >
+                {m === 'email' ? 'Email' : 'Mobile OTP'}
               </button>
-            </div>
-          )}
+            ))}
+          </div>
 
+          {mode === 'mobile' ? (
+            <form onSubmit={conf ? verifyCode : sendCode} className="mt-6 space-y-4">
+              <label className="block">
+                <span className="field-label">Mobile number</span>
+                <div className="relative">
+                  <Smartphone size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <input className="input pl-10" type="tel" inputMode="numeric" maxLength={10} autoComplete="tel-national" value={mobile} onChange={(e) => setMobile(e.target.value)} disabled={!!conf} required />
+                </div>
+              </label>
+              {conf && (
+                <label className="block">
+                  <span className="field-label">OTP</span>
+                  <input className="input" type="tel" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />
+                </label>
+              )}
+              <div id="login-recaptcha" />
+              {msg && <p className={`rounded-lg px-3 py-2 text-sm ${msg.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-leaf-50 text-leaf-800'}`}>{msg.text}</p>}
+              <button type="submit" disabled={busy || state.status === 'loading'} className="btn btn-primary h-12 w-full">
+                {busy ? <Loader2 size={18} className="animate-spin" /> : null}
+                {conf ? 'Verify and sign in' : 'Send OTP'}
+              </button>
+              {conf && (
+                <button type="button" onClick={() => { setConf(null); setCode(''); setMsg(null); }} className="block w-full text-center text-sm text-leaf-700 hover:underline">
+                  Change number / send again
+                </button>
+              )}
+            </form>
+          ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
             <label className="block">
               <span className="field-label">Email</span>
@@ -118,6 +194,7 @@ export default function LoginPage() {
               Forgot password?
             </button>
           </form>
+          )}
         </div>
       </div>
     </div>
